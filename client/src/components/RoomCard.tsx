@@ -1,19 +1,24 @@
-import DummyLogo from "../assets/DummyLogo.jpeg";
-import PeopleIcon from "@mui/icons-material/People";
+import { avatarForName } from "../utils/avatars";
 
 type Props = { title: string; owner: string; };
 
 const RoomCard = ({ title, owner }: Props) => (
-  <div className="bg-secondary-black-600 hover:bg-primary-black-400 transition-colors rounded-2xl p-4 w-full cursor-pointer">
-    <h2 className="font-montserrat font-bold text-base text-white mb-3 line-clamp-2">{title}</h2>
-    <div className="flex items-center gap-2">
-      <img src={DummyLogo} alt={owner} className="w-7 h-7 rounded-full object-cover" />
-      <span className="font-poppins text-xs text-secondary-white truncate">{owner}</span>
+  <div
+    className="group p-4 cursor-pointer transition-all hover:-translate-y-0.5"
+    style={{ background: "var(--ink-2)", border: "1px solid var(--ink-4)" }}
+    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--gold)")}
+    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--ink-4)")}
+  >
+    <div className="flex items-center gap-1.5 mb-3">
+      <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--signal)" }} />
+      <span className="font-mono text-xs tracking-widest" style={{ color: "var(--signal)" }}>LIVE</span>
     </div>
-    <div className="flex items-center gap-1 mt-2 text-secondary-white">
-      <PeopleIcon sx={{ fontSize: 14 }} />
-      <span className="font-poppins text-xs">Live</span>
-      <span className="w-2 h-2 rounded-full bg-primary-success ml-1 animate-pulse" />
+    <h2 className="font-bebas text-xl leading-tight mb-4 line-clamp-2" style={{ color: "var(--paper)" }}>
+      {title}
+    </h2>
+    <div className="flex items-center gap-2">
+      <img src={avatarForName(owner)} alt={owner} className="w-6 h-6 rounded-full object-cover" style={{ border: "1px solid var(--ink-5)" }} />
+      <span className="font-mono text-xs truncate" style={{ color: "var(--ash)" }}>{owner}</span>
     </div>
   </div>
 );

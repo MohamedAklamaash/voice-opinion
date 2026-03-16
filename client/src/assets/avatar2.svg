@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none">
+  <rect width="80" height="80" rx="40" fill="#1e1e1e"/>
+  <!-- geometric face -->
+  <polygon points="40,14 58,50 22,50" fill="#3ddc84"/>
+  <!-- eyes -->
+  <circle cx="33" cy="38" r="3" fill="#0a0a0a"/>
+  <circle cx="47" cy="38" r="3" fill="#0a0a0a"/>
+  <!-- body base -->
+  <rect x="20" y="54" width="40" height="18" rx="4" fill="#3ddc84"/>
+</svg>

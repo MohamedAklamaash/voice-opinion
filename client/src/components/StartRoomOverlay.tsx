@@ -5,9 +5,6 @@ import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { socket } from "../sockets/socket";
 import { socketActions } from "../constants/Actions";
-import PeopleIcon from "@mui/icons-material/People";
-import PublicIcon from "@mui/icons-material/Public";
-import LockIcon from "@mui/icons-material/Lock";
 import CloseIcon from "@mui/icons-material/Close";
 
 type Props = {
@@ -18,13 +15,13 @@ type Props = {
 
 type RoomType = "social" | "public" | "private";
 
-const ROOM_TYPES: { type: RoomType; label: string; desc: string; icon: React.ReactNode }[] = [
-  { type: "social", label: "Social", desc: "Friends & followers", icon: <PeopleIcon /> },
-  { type: "public", label: "Public", desc: "Open to everyone", icon: <PublicIcon /> },
-  { type: "private", label: "Private", desc: "Invite only", icon: <LockIcon /> },
+const ROOM_TYPES: { type: RoomType; label: string; desc: string }[] = [
+  { type: "social", label: "SOCIAL", desc: "Friends & followers" },
+  { type: "public", label: "PUBLIC", desc: "Open to everyone" },
+  { type: "private", label: "PRIVATE", desc: "Invite only" },
 ];
 
-const StartRoomOverlay = ({ setshowModal, showModal, primaryTheme: _p }: Props) => {
+const StartRoomOverlay = ({ setshowModal, showModal }: Props) => {
   const [selectRoom, setselectRoom] = useState<RoomType>("public");
   const [title, settitle] = useState("");
   const [loading, setLoading] = useState(false);
@@ -45,42 +42,79 @@ const StartRoomOverlay = ({ setshowModal, showModal, primaryTheme: _p }: Props) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 px-4 pb-4 sm:pb-0">
-      <div className="bg-primary-black-700 rounded-2xl w-full max-w-md p-6 shadow-2xl">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="font-montserrat font-bold text-xl">Start a Room</h2>
-          <button onClick={() => setshowModal(!showModal)} className="p-1 rounded-full hover:bg-secondary-black-600">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0"
+      style={{ background: "rgba(0,0,0,0.8)" }}
+    >
+      <div
+        className="w-full max-w-md p-6 anim-fade-up"
+        style={{ background: "var(--ink-2)", border: "1px solid var(--ink-4)" }}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <p className="font-mono text-xs tracking-widest mb-1" style={{ color: "var(--ash)" }}>
+              — NEW ROOM —
+            </p>
+            <h2 className="font-bebas text-4xl" style={{ color: "var(--paper)" }}>
+              START A ROOM
+            </h2>
+          </div>
+          <button
+            onClick={() => setshowModal(!showModal)}
+            className="font-mono text-xs tracking-widest hover:opacity-70"
+            style={{ color: "var(--ash)" }}
+          >
             <CloseIcon fontSize="small" />
           </button>
         </div>
+
+        {/* Title input */}
         <input
           type="text"
           placeholder="What do you want to talk about?"
-          className="w-full bg-secondary-black-600 text-white px-4 py-3 rounded-xl mb-5 font-poppins text-sm outline-none border border-primary-black-400 focus:border-primary-indigo transition-colors"
+          className="w-full px-4 py-3 font-mono text-sm outline-none mb-5 transition-colors"
+          style={{
+            background: "var(--ink-3)",
+            border: "1px solid var(--ink-4)",
+            color: "var(--paper)",
+          }}
+          onFocus={(e) => (e.target.style.borderColor = "var(--gold)")}
+          onBlur={(e) => (e.target.style.borderColor = "var(--ink-4)")}
           onChange={(e) => settitle(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && createARoom()}
         />
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          {ROOM_TYPES.map(({ type, label, desc, icon }) => (
+
+        {/* Room type */}
+        <div className="grid grid-cols-3 gap-2 mb-6">
+          {ROOM_TYPES.map(({ type, label, desc }) => (
             <button
               key={type}
               onClick={() => setselectRoom(type)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
-                selectRoom === type ? "border-primary-indigo bg-primary-indigo/10" : "border-primary-black-400 hover:border-primary-indigo/50"
-              }`}
+              className="flex flex-col items-start p-3 transition-all"
+              style={{
+                border: `1px solid ${selectRoom === type ? "var(--gold)" : "var(--ink-4)"}`,
+                background: selectRoom === type ? "rgba(232,184,75,0.06)" : "transparent",
+              }}
             >
-              <span className={selectRoom === type ? "text-primary-indigo" : "text-secondary-white"}>{icon}</span>
-              <span className="font-poppins text-xs font-semibold">{label}</span>
-              <span className="font-poppins text-xs text-secondary-white">{desc}</span>
+              <span
+                className="font-bebas text-sm tracking-widest mb-0.5"
+                style={{ color: selectRoom === type ? "var(--gold)" : "var(--paper)" }}
+              >
+                {label}
+              </span>
+              <span className="font-mono text-xs" style={{ color: "var(--ash)" }}>{desc}</span>
             </button>
           ))}
         </div>
+
         <button
-          className="w-full bg-primary-success hover:opacity-90 transition-opacity rounded-full py-3 font-montserrat font-bold disabled:opacity-50"
+          className="w-full font-bebas tracking-widest text-lg py-3 transition-all hover:opacity-80 disabled:opacity-30"
+          style={{ background: "var(--signal)", color: "var(--ink)" }}
           onClick={createARoom}
           disabled={!title.trim() || loading}
         >
-          {loading ? "Creating..." : "Let's Go 🎙️"}
+          {loading ? "CREATING..." : "LET'S GO 🎙️"}
         </button>
       </div>
     </div>

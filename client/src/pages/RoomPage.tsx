@@ -6,7 +6,7 @@ import { useSelector } from "react-redux";
 import MicOutlinedIcon from "@mui/icons-material/MicOutlined";
 import MicOffIcon from "@mui/icons-material/MicOff";
 import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
-import DummyLogo from "../assets/DummyLogo.jpeg";
+import { avatarForName } from "../utils/avatars";
 import { socket } from "../sockets/socket";
 import { socketActions } from "../constants/Actions";
 
@@ -19,18 +19,19 @@ const ICE_SERVERS: RTCIceServer[] = [
     { urls: "stun:stun1.l.google.com:19302" },
 ];
 
-// Simple CSS-based voice animation — no AudioContext needed for basic feedback
 const VoiceBars: FC<{ active: boolean }> = ({ active }) => {
     if (!active) return null;
     return (
-        <div className="flex items-end gap-[2px] h-5">
+        <div className="flex items-end gap-[2px] h-4">
             {[1, 2, 3, 4, 3, 2, 1].map((h, i) => (
                 <div
                     key={i}
-                    className="w-[3px] rounded-full bg-primary-success"
                     style={{
-                        height: `${h * 4}px`,
-                        animation: `voicePulse ${0.4 + i * 0.07}s ease-in-out infinite alternate`,
+                        width: "2px",
+                        height: `${h * 3}px`,
+                        background: "var(--signal)",
+                        animation: `bar-dance ${0.4 + i * 0.07}s ease-in-out infinite`,
+                        animationDelay: `${i * 0.05}s`,
                     }}
                 />
             ))}
@@ -311,34 +312,54 @@ const RoomPage: FC<Props> = () => {
     const isOwner = roomData.owner === userName;
 
     return (
-        <>
-            <style>{`@keyframes voicePulse { from { transform: scaleY(0.4); } to { transform: scaleY(1.4); } }`}</style>
-
-            <div className="min-h-screen px-4 py-6 max-w-4xl mx-auto pb-28">
+        <div className="pb-28" style={{ background: "var(--ink)" }}>
+            <div className="max-w-4xl mx-auto px-5 py-8">
                 {/* Room header */}
-                <div className="bg-secondary-black-600 rounded-2xl p-5 mb-6">
+                <div
+                    className="p-5 mb-8"
+                    style={{ border: "1px solid var(--ink-4)", background: "var(--ink-2)" }}
+                >
                     <div className="flex items-start justify-between gap-4 flex-wrap">
                         <div>
-                            <p className="text-secondary-white text-xs font-poppins mb-1">Hosted by</p>
-                            <h2 className="text-primary-indigo font-bold font-montserrat text-xl">{roomData.owner}</h2>
-                            <h1 className="font-bold text-2xl mt-1">{roomData.title}</h1>
+                            <p className="font-mono text-xs tracking-widest mb-2" style={{ color: "var(--ash)" }}>
+                                HOSTED BY{" "}
+                                <span style={{ color: "var(--gold)" }}>{roomData.owner.toUpperCase()}</span>
+                            </p>
+                            <h1 className="font-bebas text-4xl leading-tight" style={{ color: "var(--paper)" }}>
+                                {roomData.title}
+                            </h1>
+                            <div className="flex items-center gap-1.5 mt-2">
+                                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--signal)" }} />
+                                <span className="font-mono text-xs tracking-widest" style={{ color: "var(--signal)" }}>
+                                    LIVE · {roomData.roomType.toUpperCase()}
+                                </span>
+                            </div>
                         </div>
                         <div className="flex gap-2 flex-wrap items-center">
                             {isOwner ? (
-                                <button onClick={deleteRoom} className="bg-red-500 hover:bg-red-600 text-white font-poppins text-sm font-semibold px-5 py-2 rounded-full">
-                                    End Room
+                                <button
+                                    onClick={deleteRoom}
+                                    className="font-bebas tracking-widest text-sm px-5 py-2 transition-all hover:opacity-80"
+                                    style={{ background: "var(--danger)", color: "var(--paper)" }}
+                                >
+                                    END ROOM
                                 </button>
                             ) : (
                                 <button
                                     onClick={inRoom ? leaveRoom : joinRoom}
-                                    className={`${inRoom ? "bg-red-500 hover:bg-red-600" : "bg-primary-success hover:opacity-90"} text-white font-poppins text-sm font-semibold px-5 py-2 rounded-full`}
+                                    className="font-bebas tracking-widest text-sm px-5 py-2 transition-all hover:opacity-80"
+                                    style={{
+                                        background: inRoom ? "var(--danger)" : "var(--signal)",
+                                        color: "var(--ink)",
+                                    }}
                                 >
-                                    {inRoom ? "Leave" : "Join Room 🎙️"}
+                                    {inRoom ? "LEAVE" : "JOIN ROOM 🎙️"}
                                 </button>
                             )}
                         </div>
                     </div>
-                    {/* Invite UI — shown to owner for non-public rooms */}
+
+                    {/* Invite UI */}
                     {isOwner && roomData.roomType !== "public" && (
                         <div className="mt-4 flex gap-2">
                             <input
@@ -347,67 +368,108 @@ const RoomPage: FC<Props> = () => {
                                 value={inviteEmail}
                                 onChange={e => setInviteEmail(e.target.value)}
                                 onKeyDown={e => e.key === "Enter" && sendInvite()}
-                                className="flex-1 bg-primary-black-700 text-white px-3 py-2 rounded-xl text-sm font-poppins outline-none border border-primary-black-400 focus:border-primary-indigo transition-colors"
+                                className="flex-1 px-3 py-2 font-mono text-xs outline-none transition-colors"
+                                style={{
+                                    background: "var(--ink-3)",
+                                    border: "1px solid var(--ink-4)",
+                                    color: "var(--paper)",
+                                }}
+                                onFocus={(e) => (e.target.style.borderColor = "var(--gold)")}
+                                onBlur={(e) => (e.target.style.borderColor = "var(--ink-4)")}
                             />
-                            <button onClick={sendInvite} disabled={!inviteEmail.trim()}
-                                className="bg-primary-indigo hover:opacity-90 px-4 py-2 rounded-xl text-sm font-poppins font-semibold disabled:opacity-50">
-                                Invite
+                            <button
+                                onClick={sendInvite}
+                                disabled={!inviteEmail.trim()}
+                                className="font-bebas tracking-widest text-sm px-4 py-2 transition-all hover:opacity-80 disabled:opacity-30"
+                                style={{ background: "var(--gold)", color: "var(--ink)" }}
+                            >
+                                INVITE
                             </button>
                         </div>
                     )}
-                    {inviteStatus && <p className="text-xs font-poppins mt-2 text-primary-success">{inviteStatus}</p>}
+                    {inviteStatus && (
+                        <p className="font-mono text-xs mt-2" style={{ color: "var(--signal)" }}>{inviteStatus}</p>
+                    )}
                 </div>
 
-                {/* Speakers grid */}
-                <p className="font-poppins font-semibold text-secondary-white text-xs mb-4 uppercase tracking-widest">
-                    Speakers · {userData.length}
+                {/* Speakers label */}
+                <p className="font-mono text-xs tracking-widest mb-5" style={{ color: "var(--ash)" }}>
+                    — SPEAKERS · {userData.length} —
                 </p>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-5">
+
+                {/* Speakers grid */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-6">
                     {Array.from(new Map(userData.filter(u => u.name).map(u => [u.socketId ?? u._id ?? u.name, u])).values()).map((user) => {
                         const isMe = user.name === userName;
                         const speaking = inRoom && !user.isMuted;
                         return (
                             <div key={user.socketId ?? user._id ?? user.name} className="flex flex-col items-center gap-2">
                                 <div className="relative">
+                                    {/* Speaking ring */}
+                                    {speaking && (
+                                        <span
+                                            className="absolute inset-0 rounded-full"
+                                            style={{
+                                                border: "2px solid var(--signal)",
+                                                animation: "pulse-ring 1.2s ease-out infinite",
+                                            }}
+                                        />
+                                    )}
                                     <img
-                                        src={user.userProfileUrl || DummyLogo}
+                                        src={user.userProfileUrl || avatarForName(user.name)}
                                         alt={user.name}
-                                        className={`w-16 h-16 rounded-full object-cover border-2 transition-all ${speaking ? "border-primary-success shadow-[0_0_12px_2px_rgba(32,189,95,0.4)]" : "border-transparent"}`}
+                                        className="w-14 h-14 rounded-full object-cover"
+                                        style={{
+                                            border: `2px solid ${speaking ? "var(--signal)" : "var(--ink-4)"}`,
+                                        }}
                                     />
                                     {user.isMuted && (
-                                        <span className="absolute -bottom-1 -right-1 bg-red-500 rounded-full p-0.5">
-                                            <MicOffIcon sx={{ fontSize: 12 }} />
+                                        <span
+                                            className="absolute -bottom-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full"
+                                            style={{ background: "var(--danger)" }}
+                                        >
+                                            <MicOffIcon sx={{ fontSize: 11 }} />
                                         </span>
                                     )}
                                 </div>
-                                <p className="font-poppins text-xs text-center font-semibold truncate w-full">
-                                    {isMe ? `${user.name} (you)` : user.name.slice(0, 10) + (user.name.length > 10 ? "…" : "")}
+                                <p className="font-mono text-xs text-center truncate w-full" style={{ color: "var(--paper)" }}>
+                                    {isMe ? "YOU" : user.name.slice(0, 8) + (user.name.length > 8 ? "…" : "")}
                                 </p>
                                 <VoiceBars active={speaking} />
                                 {isOwner && !isMe && (
-                                    <button onClick={() => removeUser(user)} className="text-red-400 hover:text-red-300" title="Remove">
-                                        <PersonRemoveIcon sx={{ fontSize: 16 }} />
+                                    <button
+                                        onClick={() => removeUser(user)}
+                                        className="transition-opacity hover:opacity-70"
+                                        style={{ color: "var(--danger)" }}
+                                        title="Remove"
+                                    >
+                                        <PersonRemoveIcon sx={{ fontSize: 14 }} />
                                     </button>
                                 )}
                             </div>
                         );
                     })}
                 </div>
-
-                {/* Floating mute button */}
-                {inRoom && (
-                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-                        <button
-                            onClick={toggleMute}
-                            className={`flex items-center gap-2 px-6 py-3 rounded-full font-poppins font-semibold text-sm shadow-2xl ${isMuted ? "bg-red-500" : "bg-primary-indigo"}`}
-                        >
-                            {isMuted ? <MicOffIcon fontSize="small" /> : <MicOutlinedIcon fontSize="small" />}
-                            {isMuted ? "Unmute" : "Mute"}
-                        </button>
-                    </div>
-                )}
             </div>
-        </>
+
+            {/* Floating mute button */}
+            {inRoom && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+                    <button
+                        onClick={toggleMute}
+                        className="flex items-center gap-2 px-7 py-3 font-bebas tracking-widest text-base transition-all hover:opacity-80"
+                        style={{
+                            background: isMuted ? "var(--danger)" : "var(--gold)",
+                            color: "var(--ink)",
+                            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                        }}
+                    >
+                        {isMuted ? <MicOffIcon fontSize="small" /> : <MicOutlinedIcon fontSize="small" />}
+                        {isMuted ? "UNMUTE" : "MUTE"}
+                    </button>
+                </div>
+            )}
+        </div>
     );
 };
 

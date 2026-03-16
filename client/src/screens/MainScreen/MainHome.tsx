@@ -1,6 +1,5 @@
 import { Theme } from "../../App";
 import { useState, useEffect } from "react";
-import AddIcon from "@mui/icons-material/Add";
 import RoomCard from "../../components/RoomCard";
 import StartRoomOverlay from "../../components/StartRoomOverlay";
 import axios from "axios";
@@ -53,66 +52,93 @@ const MainHome = ({ primaryTheme }: Props) => {
     return () => { socket.off("new-room"); };
   }, []);
 
-  const filtered = search ? allRooms.filter(r => r.title.toLowerCase().includes(search.toLowerCase())) : allRooms;
+  const filtered = search
+    ? allRooms.filter(r => r.title.toLowerCase().includes(search.toLowerCase()))
+    : allRooms;
 
   return (
-    <div className="min-h-screen px-4 py-6 max-w-5xl mx-auto">
-      {/* Pending invites banner */}
+    <div style={{ background: "var(--ink)" }}>
+      {/* Pending invites */}
       {invites.length > 0 && (
-        <div className="mb-5 bg-primary-indigo/10 border border-primary-indigo rounded-2xl p-4">
-          <p className="font-poppins font-semibold text-sm mb-3">📬 You have {invites.length} pending invite{invites.length > 1 ? "s" : ""}</p>
-          <div className="flex flex-col gap-2">
+        <div
+          className="px-5 py-3 flex items-center gap-4 flex-wrap"
+          style={{ background: "rgba(232,184,75,0.08)", borderBottom: "1px solid var(--gold-dim)" }}
+        >
+          <span className="font-mono text-xs tracking-widest" style={{ color: "var(--gold)" }}>
+            📬 {invites.length} PENDING INVITE{invites.length > 1 ? "S" : ""}
+          </span>
+          <div className="flex gap-3 flex-wrap">
             {invites.map(room => (
-              <div key={room._id} className="flex items-center justify-between gap-3">
-                <span className="font-poppins text-sm truncate">{room.title} <span className="text-secondary-white">by {room.owner}</span></span>
-                <Link to={`/room/${room._id}`} className="bg-primary-indigo hover:opacity-90 text-white text-xs font-poppins font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">
-                  Join
-                </Link>
-              </div>
+              <Link
+                key={room._id}
+                to={`/room/${room._id}`}
+                className="font-mono text-xs tracking-widest px-3 py-1 transition-all hover:opacity-80"
+                style={{ border: "1px solid var(--gold)", color: "var(--gold)" }}
+              >
+                {room.title.slice(0, 20)}{room.title.length > 20 ? "…" : ""} →
+              </Link>
             ))}
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h1 className="font-montserrat font-bold text-2xl">
-            Hey, {userName.charAt(0).toUpperCase() + userName.slice(1)} 👋
-          </h1>
-          <p className="text-secondary-white text-sm font-poppins">What do you want to talk about today?</p>
+      <div className="max-w-5xl mx-auto px-5 py-8">
+        {/* Header */}
+        <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
+          <div>
+            <p className="font-mono text-xs tracking-widest mb-2" style={{ color: "var(--ash)" }}>
+              — LIVE ROOMS —
+            </p>
+            <h1 className="font-bebas leading-none" style={{ fontSize: "clamp(2.5rem, 6vw, 4rem)", color: "var(--paper)" }}>
+              HEY,{" "}
+              <span style={{ color: "var(--gold)" }}>
+                {userName.toUpperCase()}
+              </span>
+            </h1>
+            <p className="font-mono text-xs mt-1" style={{ color: "var(--ash)" }}>
+              What do you want to talk about today?
+            </p>
+          </div>
+          <button
+            className="font-bebas tracking-widest text-base px-6 py-2.5 transition-all hover:opacity-80"
+            style={{ background: "var(--signal)", color: "var(--ink)" }}
+            onClick={() => setshowModal(true)}
+          >
+            + START A ROOM
+          </button>
         </div>
-        <button
-          className="flex items-center gap-2 bg-primary-success hover:opacity-90 transition-opacity px-4 py-2 rounded-full font-poppins font-semibold text-sm"
-          onClick={() => setshowModal(true)}
-        >
-          <AddIcon fontSize="small" /> Start a Room
-        </button>
+
+        {/* Search */}
+        <input
+          type="text"
+          placeholder="SEARCH ROOMS..."
+          className="w-full px-4 py-3 font-mono text-xs tracking-widest outline-none mb-8 transition-colors"
+          style={{
+            background: "var(--ink-2)",
+            border: "1px solid var(--ink-4)",
+            color: "var(--paper)",
+          }}
+          onFocus={(e) => (e.target.style.borderColor = "var(--gold)")}
+          onBlur={(e) => (e.target.style.borderColor = "var(--ink-4)")}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        {/* Rooms grid */}
+        {filtered.length === 0 ? (
+          <div className="text-center py-24">
+            <p className="font-bebas text-5xl mb-2" style={{ color: "var(--ink-4)" }}>NO ROOMS YET</p>
+            <p className="font-mono text-xs" style={{ color: "var(--ash)" }}>Be the first to start one.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {filtered.map((room) => (
+              <Link to={`/room/${room._id}`} key={room._id}>
+                <RoomCard title={room.title} owner={room.owner} />
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* Search */}
-      <input
-        type="text"
-        placeholder="🔍  Search rooms..."
-        className={`w-full ${primaryTheme === "dark" ? "bg-secondary-black-600 text-white" : "bg-gray-100 text-black"} px-4 py-3 rounded-xl mb-6 font-poppins text-sm outline-none border border-primary-black-400 focus:border-primary-indigo transition-colors`}
-        onChange={(e) => setSearch(e.target.value)}
-      />
-
-      {/* Rooms */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-20">
-          <span className="text-5xl">🎙️</span>
-          <p className="text-secondary-white font-poppins mt-4">No rooms yet. Be the first to start one!</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {filtered.map((room) => (
-            <Link to={`/room/${room._id}`} key={room._id}>
-              <RoomCard title={room.title} owner={room.owner} />
-            </Link>
-          ))}
-        </div>
-      )}
 
       {showModal && <StartRoomOverlay setshowModal={setshowModal} showModal={showModal} primaryTheme={primaryTheme} />}
     </div>

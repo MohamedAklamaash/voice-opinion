@@ -1,10 +1,10 @@
 import { Theme } from "../App";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import DummyLogo from "../assets/DummyLogo.jpeg";
 import axios from "axios";
 import { useDispatch } from "react-redux";
 import { setProfileUrl } from "../store/UserSlice";
+import { randomAvatar } from "../utils/avatars";
 
 type Props = {
   setstepPageCount: (num: number) => void;
@@ -18,6 +18,8 @@ const LoginPage = ({ setstepPageCount, stepPageCount }: Props) => {
   const dispatch = useDispatch();
   const [error, setError] = useState<string | null>(null);
   const [image, setImage] = useState<File | null>(null);
+  // pick a random default avatar once on mount
+  const [defaultAvatar] = useState(() => randomAvatar());
   const [preview, setPreview] = useState("");
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,8 +27,8 @@ const LoginPage = ({ setstepPageCount, stepPageCount }: Props) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) { setError("Select a valid image."); return; }
-    if (file.size > 2 * 1024 * 1024) { setError("Max 2MB."); return; }
+    if (!file.type.startsWith("image/")) { setError("SELECT A VALID IMAGE."); return; }
+    if (file.size > 2 * 1024 * 1024) { setError("MAX 2MB."); return; }
     setImage(file);
     setPreview(URL.createObjectURL(file));
     setError(null);
@@ -43,7 +45,7 @@ const LoginPage = ({ setstepPageCount, stepPageCount }: Props) => {
       setUrl(res.data.secure_url);
       setError(null);
     } catch {
-      setError("Upload failed.");
+      setError("UPLOAD FAILED.");
     } finally {
       setLoading(false);
     }
@@ -51,51 +53,73 @@ const LoginPage = ({ setstepPageCount, stepPageCount }: Props) => {
 
   const handleContinue = () => {
     setstepPageCount(stepPageCount + 1);
-    if (url) dispatch(setProfileUrl(url));
-    navigate(`/home?userName=${userName}&profileUrl=${url}`);
+    // use uploaded url, or fall back to the randomly chosen default avatar
+    const finalUrl = url || defaultAvatar;
+    dispatch(setProfileUrl(finalUrl));
+    navigate(`/home?userName=${userName}&profileUrl=${finalUrl}`);
   };
 
   return (
-    <div className="h-screen flex items-center justify-center px-4 overflow-hidden">
-      <div className="w-full max-w-xs text-center">
-        <h1 className="text-xl font-bold font-montserrat mb-1">
-          Hey, <span className="text-primary-indigo">{userName ? userName.charAt(0).toUpperCase() + userName.slice(1) : ""}</span> 👋
+    <div className="flex-1 flex items-center justify-center px-5" style={{ background: "var(--ink)" }}>
+      <div className="w-full max-w-xs anim-fade-up">
+        <p className="font-mono text-xs tracking-widest mb-3" style={{ color: "var(--ash)" }}>
+          — STEP 04 / PROFILE —
+        </p>
+        <h1 className="font-bebas text-5xl leading-none mb-1" style={{ color: "var(--paper)" }}>
+          HEY,{" "}
+          <span style={{ color: "var(--gold)" }}>
+            {userName ? userName.toUpperCase() : ""}
+          </span>
         </h1>
-        <p className="text-secondary-white text-xs font-poppins mb-4">Add a profile photo (optional)</p>
+        <p className="font-mono text-xs mb-8" style={{ color: "var(--ash)" }}>
+          Add a profile photo — optional.
+        </p>
 
-        <div className="bg-secondary-black-600 rounded-2xl p-5 shadow-2xl">
-          <div className="relative w-20 h-20 mx-auto mb-4">
+        {/* Avatar */}
+        <div className="flex flex-col items-center gap-4 mb-6">
+          <div className="relative">
             <img
-              src={preview || DummyLogo}
-              className="w-20 h-20 rounded-full object-cover border-4 border-primary-indigo"
+              src={preview || defaultAvatar}
+              className="w-24 h-24 rounded-full object-cover"
+              style={{ border: "2px solid var(--gold)" }}
               alt="Profile"
             />
-            <label htmlFor="fileInput" className="absolute bottom-0 right-0 bg-primary-indigo rounded-full w-7 h-7 flex items-center justify-center cursor-pointer hover:opacity-90">
-              <span className="text-white text-base leading-none">+</span>
+            <label
+              htmlFor="fileInput"
+              className="absolute bottom-0 right-0 w-7 h-7 flex items-center justify-center cursor-pointer font-bebas text-sm"
+              style={{ background: "var(--gold)", color: "var(--ink)" }}
+            >
+              +
             </label>
             <input type="file" accept="image/*" id="fileInput" className="hidden" onChange={handleFileChange} />
           </div>
 
-          {error && <p className="text-red-400 text-xs mb-2 font-poppins">{error}</p>}
+          {error && <p className="font-mono text-xs" style={{ color: "var(--danger)" }}>{error}</p>}
 
           {image && !url && (
             <button
-              className="w-full border border-primary-indigo text-primary-indigo hover:bg-primary-indigo hover:text-white transition-all rounded-full py-2 font-poppins text-sm font-semibold mb-3 disabled:opacity-50"
+              className="font-mono text-xs tracking-widest px-6 py-2 transition-all hover:opacity-80 disabled:opacity-30"
+              style={{ border: "1px solid var(--gold)", color: "var(--gold)" }}
               onClick={uploadImage}
               disabled={loading}
             >
-              {loading ? "Uploading..." : "Upload Photo"}
+              {loading ? "UPLOADING..." : "UPLOAD PHOTO"}
             </button>
           )}
-          {url && <p className="text-primary-success text-xs font-poppins mb-3">✓ Photo uploaded</p>}
-
-          <button
-            className="w-full bg-primary-indigo hover:opacity-90 transition-opacity rounded-full py-3 font-montserrat font-bold text-sm"
-            onClick={handleContinue}
-          >
-            Enter the app →
-          </button>
+          {url && (
+            <p className="font-mono text-xs" style={{ color: "var(--signal)" }}>
+              ✓ PHOTO UPLOADED
+            </p>
+          )}
         </div>
+
+        <button
+          className="w-full font-bebas tracking-widest text-lg py-3 transition-all hover:opacity-80"
+          style={{ background: "var(--gold)", color: "var(--ink)" }}
+          onClick={handleContinue}
+        >
+          ENTER THE APP →
+        </button>
       </div>
     </div>
   );

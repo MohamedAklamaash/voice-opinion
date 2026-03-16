@@ -16,7 +16,7 @@ const MailComponent = ({ setstepPageCount, stepPageCount }: Props) => {
   const navigate = useNavigate();
 
   const handleEmail = async () => {
-    if (!email.trim()) { setError("Please enter your email"); return; }
+    if (!email.trim()) { setError("ENTER YOUR EMAIL"); return; }
     setLoading(true);
     setError("");
     try {
@@ -24,31 +24,41 @@ const MailComponent = ({ setstepPageCount, stepPageCount }: Props) => {
       setstepPageCount(stepPageCount + 1);
       navigate(`/getUrOtp?email=${email}`);
     } catch {
-      setError("Failed to send OTP. Please try again.");
+      setError("FAILED TO SEND OTP. TRY AGAIN.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="bg-secondary-black-600 rounded-2xl p-6 shadow-2xl">
+    <div className="flex flex-col gap-4">
       <input
         type="email"
         onChange={(e) => setemail(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleEmail()}
         placeholder="you@example.com"
-        className="w-full bg-primary-black-700 text-white px-4 py-3 rounded-xl mb-3 font-poppins text-sm outline-none border border-primary-black-400 focus:border-primary-indigo transition-colors"
+        className="px-4 py-3 font-mono text-sm outline-none transition-colors"
+        style={{
+          background: "var(--ink-2)",
+          border: "1px solid var(--ink-4)",
+          color: "var(--paper)",
+        }}
+        onFocus={(e) => (e.target.style.borderColor = "var(--gold)")}
+        onBlur={(e) => (e.target.style.borderColor = "var(--ink-4)")}
       />
-      {error && <p className="text-red-400 text-xs mb-3 font-poppins">{error}</p>}
+      {error && (
+        <p className="font-mono text-xs" style={{ color: "var(--danger)" }}>{error}</p>
+      )}
       <button
-        className="w-full bg-primary-indigo hover:opacity-90 transition-opacity rounded-full py-3 font-montserrat font-bold disabled:opacity-50"
+        className="font-bebas tracking-widest text-lg py-3 transition-all hover:opacity-80 disabled:opacity-30"
+        style={{ background: "var(--gold)", color: "var(--ink)" }}
         onClick={handleEmail}
         disabled={loading}
       >
-        {loading ? "Sending..." : "Send OTP →"}
+        {loading ? "SENDING..." : "SEND OTP →"}
       </button>
-      <p className="text-secondary-white text-xs font-poppins mt-4 text-center">
-        By continuing, you agree to our Terms of Service and Privacy Policy.
+      <p className="font-mono text-xs text-center" style={{ color: "var(--ink-5)" }}>
+        By continuing you agree to our Terms &amp; Privacy Policy.
       </p>
     </div>
   );

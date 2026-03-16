@@ -22,32 +22,45 @@ const PhoneComponent = ({ setstepPageCount, stepPageCount }: Props) => {
   };
 
   return (
-    <div className="bg-secondary-black-600 rounded-2xl p-6 shadow-2xl">
-      <div className="flex items-center gap-3 bg-primary-black-700 rounded-xl px-4 py-3 mb-3 border border-primary-black-400 focus-within:border-primary-indigo transition-colors">
-        <img src={indianFlag} alt="+91" className="w-6 h-6 rounded-sm" />
-        <span className="text-secondary-white font-poppins text-sm">+91</span>
-        <div className="w-px h-5 bg-primary-black-400" />
+    <div className="flex flex-col gap-4">
+      <div
+        className="flex items-center gap-3 px-4 py-3 transition-colors"
+        style={{
+          background: "var(--ink-2)",
+          border: "1px solid var(--ink-4)",
+        }}
+      >
+        <img src={indianFlag} alt="+91" className="w-5 h-5 rounded-sm" />
+        <span className="font-mono text-xs" style={{ color: "var(--ash)" }}>+91</span>
+        <div className="w-px h-4" style={{ background: "var(--ink-4)" }} />
         <input
           type="tel"
-          className="flex-1 bg-transparent text-white font-poppins text-sm outline-none"
+          className="flex-1 bg-transparent font-mono text-sm outline-none"
+          style={{ color: "var(--paper)" }}
           onChange={(e) => setphoneNumber(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleNext()}
           placeholder="10-digit number"
           maxLength={10}
         />
       </div>
+
       {phoneNumber && !isValid && (
-        <p className="text-red-400 text-xs mb-3 font-poppins">Enter a valid 10-digit number</p>
+        <p className="font-mono text-xs" style={{ color: "var(--danger)" }}>
+          INVALID NUMBER
+        </p>
       )}
+
       <button
-        className="w-full bg-primary-indigo hover:opacity-90 transition-opacity rounded-full py-3 font-montserrat font-bold disabled:opacity-50"
+        className="font-bebas tracking-widest text-lg py-3 transition-all hover:opacity-80 disabled:opacity-30"
+        style={{ background: "var(--gold)", color: "var(--ink)" }}
         onClick={handleNext}
         disabled={!isValid}
       >
-        Send OTP →
+        SEND OTP →
       </button>
-      <p className="text-secondary-white text-xs font-poppins mt-4 text-center">
-        By continuing, you agree to our Terms of Service and Privacy Policy.
+
+      <p className="font-mono text-xs text-center" style={{ color: "var(--ink-5)" }}>
+        By continuing you agree to our Terms &amp; Privacy Policy.
       </p>
     </div>
   );

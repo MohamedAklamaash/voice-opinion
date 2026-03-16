@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, useRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { setEmail, setPhoneNumber, setUserName, setProfileUrl } from "../store/UserSlice";
@@ -17,7 +17,7 @@ const GetOtpPage: React.FC<Props> = ({ setstepPageCount, stepPageCount }: Props)
   const phoneNumber = urlParams.get("phoneNumber");
   const email = urlParams.get("email");
   const dispatch = useDispatch();
-  dispatch(setPhoneNumber(phoneNumber));
+  useEffect(() => { dispatch(setPhoneNumber(phoneNumber)); }, []);
 
   const [otp, setOtp] = useState<string[]>(["", "", "", ""]);
   const [error, setError] = useState("");
@@ -26,7 +26,7 @@ const GetOtpPage: React.FC<Props> = ({ setstepPageCount, stepPageCount }: Props)
 
   const VerifyOtp = async () => {
     const otpStr = otp.join("");
-    if (otpStr.length < 4) { setError("Enter all 4 digits"); return; }
+    if (otpStr.length < 4) { setError("ENTER ALL 4 DIGITS"); return; }
     setLoading(true);
     setError("");
     try {
@@ -38,22 +38,18 @@ const GetOtpPage: React.FC<Props> = ({ setstepPageCount, stepPageCount }: Props)
         userProfileUrl?: string;
       }>(`${import.meta.env.VITE_API_URL}/Otp/verify-otp`, { email, otp: otpStr });
 
-      if (!data.success) { setError("Invalid OTP. Please try again."); setLoading(false); return; }
-
+      if (!data.success) { setError("INVALID OTP. TRY AGAIN."); setLoading(false); return; }
       dispatch(setEmail(email));
-
       if (data.existingUser && data.name) {
-        // Returning user — skip name/photo screens, go straight to home
         dispatch(setUserName(data.name));
         if (data.userProfileUrl) dispatch(setProfileUrl(data.userProfileUrl));
         navigate("/home");
         return;
       }
-
       setstepPageCount(stepPageCount + 1);
       navigate("/enterName");
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError("SOMETHING WENT WRONG.");
       setLoading(false);
     }
   };
@@ -78,14 +74,24 @@ const GetOtpPage: React.FC<Props> = ({ setstepPageCount, stepPageCount }: Props)
   };
 
   return (
-    <div className="h-screen flex items-center justify-center px-4 overflow-hidden">
-      <div className="w-full max-w-sm text-center">
-        <span className="text-5xl">📬</span>
-        <h1 className="text-2xl font-bold font-montserrat mt-4 mb-1">Check your inbox</h1>
-        <p className="text-secondary-white text-sm font-poppins mb-8">
-          We sent a 4-digit OTP to <span className="text-white font-semibold">{email || phoneNumber}</span>
+    <div className="flex-1 flex items-center justify-center px-5" style={{ background: "var(--ink)" }}>
+      <div className="w-full max-w-[280px] mx-auto anim-fade-up">
+        <p className="font-mono text-xs tracking-widest mb-3" style={{ color: "var(--ash)" }}>
+          — STEP 02 / VERIFY —
         </p>
-        <div className="flex justify-center gap-3 mb-6">
+        <h1 className="font-bebas text-6xl leading-none mb-1" style={{ color: "var(--paper)" }}>
+          CHECK YOUR
+        </h1>
+        <h2 className="font-bebas text-6xl leading-none mb-3" style={{ color: "var(--gold)" }}>
+          INBOX.
+        </h2>
+        <p className="font-mono text-xs mb-8" style={{ color: "var(--ash)" }}>
+          4-digit code sent to{" "}
+          <span style={{ color: "var(--paper)" }}>{email || phoneNumber}</span>
+        </p>
+
+        {/* OTP inputs */}
+        <div className="flex gap-3 mb-6">
           {otp.map((digit, index) => (
             <input
               key={index}
@@ -93,26 +99,38 @@ const GetOtpPage: React.FC<Props> = ({ setstepPageCount, stepPageCount }: Props)
               inputMode="numeric"
               value={digit}
               maxLength={1}
-              className="w-14 h-14 bg-secondary-black-600 text-white text-2xl font-bold text-center rounded-xl border-2 border-primary-black-400 focus:border-primary-indigo outline-none transition-colors"
+              className="flex-1 h-16 font-bebas text-3xl text-center outline-none transition-colors"
+              style={{
+                background: "var(--ink-2)",
+                border: `1px solid ${digit ? "var(--gold)" : "var(--ink-4)"}`,
+                color: "var(--paper)",
+              }}
               onChange={handleOtpChange(index)}
               onKeyDown={handleKeyDown(index)}
               ref={(input) => { if (input) otpInputs.current[index] = input; }}
             />
           ))}
         </div>
-        {error && <p className="text-red-400 text-sm font-poppins mb-4">{error}</p>}
+
+        {error && (
+          <p className="font-mono text-xs mb-4" style={{ color: "var(--danger)" }}>{error}</p>
+        )}
+
         <button
-          className="w-full bg-primary-indigo hover:opacity-90 transition-opacity rounded-full py-4 font-montserrat font-bold text-lg disabled:opacity-50"
+          className="w-full font-bebas tracking-widest text-lg py-3 mb-4 transition-all hover:opacity-80 disabled:opacity-30"
+          style={{ background: "var(--gold)", color: "var(--ink)" }}
           onClick={VerifyOtp}
           disabled={loading || otp.join("").length < 4}
         >
-          {loading ? "Verifying..." : "Verify OTP →"}
+          {loading ? "VERIFYING..." : "VERIFY →"}
         </button>
+
         <button
-          className="mt-4 text-secondary-white text-sm font-poppins hover:text-white"
+          className="font-mono text-xs tracking-widest hover:opacity-70"
+          style={{ color: "var(--ash)" }}
           onClick={() => navigate("/signIn")}
         >
-          ← Back to sign in
+          ← BACK
         </button>
       </div>
     </div>
