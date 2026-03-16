@@ -1,417 +1,414 @@
-import { useEffect, useState, FC, useCallback, useRef } from "react";
+import { useEffect, useState, FC, useRef } from "react";
 import { Theme } from "../App";
-import { Link, useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useSelector } from "react-redux";
 import MicOutlinedIcon from "@mui/icons-material/MicOutlined";
 import MicOffIcon from "@mui/icons-material/MicOff";
+import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
 import DummyLogo from "../assets/DummyLogo.jpeg";
-import { Icon } from "@mui/material";
 import { socket } from "../sockets/socket";
 import { socketActions } from "../constants/Actions";
-import { useWebRtc } from "../hooks/useWEBRTC";
-interface Props {
-  primaryTheme: Theme;
-}
 
-interface RoomData {
-  owner: string;
-  title: string;
-  speakers: string[];
-}
+interface Props { primaryTheme: Theme; }
+interface RoomData { owner: string; title: string; speakers: string[]; roomType: string; }
+interface User { name: string; userProfileUrl?: string; _id?: string; isMuted?: boolean; socketId?: string; }
 
-interface User {
-  name: string;
-  userProfileUrl?: string;
-  _id?: string;
-  isMuted?: boolean;
-}
+const ICE_SERVERS: RTCIceServer[] = [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+];
 
-/*
-  1) P2P needs to be done only for the users that are online,
-  2) Need to update the state of the ui without ever refreshing it,--done
-  3) need to add a green btn for the users that are online
-  4) Muting and unmuting info should be relied b/w the users that are online --done
-  5) Need to take the ref of the audio element and share audio data b/t the devices
-  6) need to add logout btn for a mobile device
-  7) The Overlay component is not working in mobile devices
-  8) Need to add React Helmet
-  Note:
-    -- UI must be updated properly when there is a change of state in the data of the existing users --done
-*/
-
-const RoomPage: FC<Props> = ({ primaryTheme }: Props) => {
-  const { id } = useParams<{ id: string }>();
-  const [roomData, setRoomData] = useState<RoomData>({
-    owner: "",
-    title: "",
-    speakers: [],
-  });
-
-  const [userData, setUserData] = useState<User[]>([]);
-  const [userAlreadyInRoom, setUserAlreadyInRoom] = useState<boolean>(false);
-  const roomUsersRef = useRef<User[]>();
-  const [doesRoomExist, setdoesRoomExist] = useState<boolean>(true);
-  const { userName, email, userProfileUrl } = useSelector(
-    (state: {
-      user: { userName: string; email: string; userProfileUrl?: string };
-    }) => state.user
-  );
-
-  // these are the set of  vars that are responsibe for webRTC
-  const { captureMedia } = useWebRtc();
-  const connections = useRef<Record<string, RTCPeerConnection | null>>({});
-  const localMediaStream = useRef<MediaStream | null>(null);
-  const audioElements = useRef<Record<string, HTMLAudioElement>>({});
-  const getRoomDetails = useCallback(async () => {
-    try {
-      const response = await axios.get<{
-        data: RoomData;
-        userData: User[];
-        success: boolean;
-      }>(`http://localhost:8001/room/getRoomDetails/${id}`);
-      const { data, userData, success } = response.data;
-      setRoomData(data);
-      setdoesRoomExist(success);
-      setUserAlreadyInRoom(data.speakers.includes(userName));
-      setUserData(userData);
-      localMediaStream.current = await captureMedia();
-      userData.map((usr, index) => {
-        if (usr._id && !connections.current[usr._id]) {
-          connections.current[usr._id] = null;
-        }
-      });
-      socket.emit(socketActions.ADD_PEER, { roomId: id, users: userData });
-      const storedIsUserMuted = sessionStorage.getItem("isUserMuted");
-      const initialMuteState: Record<string, boolean> = storedIsUserMuted
-        ? JSON.parse(storedIsUserMuted)
-        : {};
-      data.speakers.forEach((usr: string) => {
-        initialMuteState[usr] = initialMuteState[usr] || false;
-      });
-    } catch (error) {
-      console.error("Error fetching room details:", error);
-    }
-  }, [id, userName]);
-
-  // window.addEventListener("beforeunload", (event) => {
-  //   const message = "Are you sure you want to leave?";
-  //   event.returnValue = message; // Standard for most browsers
-  //   return message; // For some older browsers
-  // });
-
-  useEffect(() => {
-    roomUsersRef.current = userData;
-  }, [userData]);
-
-  if (!doesRoomExist) {
-    window.location.href = `http://localhost:5173/home?userName=${userName}&?profileUrl=${userProfileUrl}`;
-  }
-
-  const leaveTheRoom = async () => {
-    try {
-      const {
-        data: { userData },
-      } = await axios.put(`http://localhost:8001/room/leaveRoom/${id}`, {
-        email,
-      });
-      socket.emit(socketActions.LEAVE, { user: userData, roomId: id });
-      window.location.href = `http://localhost:5173/home?userName=${userName}&?profileUrl=${userProfileUrl}`;
-    } catch (error) {
-      console.error("Error leaving the room:", error);
-    }
-  };
-
-  const joinRoom = async () => {
-    try {
-      const response = await axios.put(
-        `http://localhost:8001/room/joinRoom/${id}`,
-        {
-          email,
-        }
-      );
-
-      const { userData } = response.data;
-
-      socket.emit(socketActions.JOIN, { roomId: id, user: userData });
-
-      const iceServers: RTCIceServer[] = [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:global.stun.twilio.com:3478" },
-      ];
-
-      if (
-        userData._id !== null 
-      ) {
-        const peerConnection = new RTCPeerConnection({ iceServers });
-
-        connections.current[userData._id] = peerConnection;
-
-        peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-          console.log(event);
-          
-          if (event.candidate) {
-            console.log("Ice candidate:",event.candidate);
-            
-            socket.emit(socketActions.ICE_CANDIDATE, {
-              iceCandidate: event.candidate,
-              peerId: userData._id,
-              roomId: id,
-            });
-          }
-        };
-
-        peerConnection.ontrack = ({ streams: [remoteStreams] }) => {
-          const currUser = roomUsersRef.current?.find(
-            (usr) => usr._id === userData._id
-          );
-
-          if (currUser) {
-            // need to handle ontrack logic for the current user if needed
-          }
-
-          const audioElement = audioElements.current[userData._id];
-
-          if (audioElement) {
-            audioElement.srcObject = remoteStreams;
-          } else {
-            let settled = false;
-            const interval = setInterval(() => {
-              if (audioElements.current[userData._id]) {
-                audioElements.current[userData._id].srcObject = remoteStreams;
-                settled = true;
-              }
-              if (settled) {
-                clearInterval(interval);
-              }
-            }, 300);
-          }
-        };
-
-        const offer: RTCSessionDescriptionInit =
-          await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-
-        localStorage.setItem("localDescription", JSON.stringify(offer));
-
-        socket.emit(socketActions.RELAY_SDP, {
-          sessionDescription: offer,
-          peerId: userData._id,
-          roomId: id,
-        });
-
-        localMediaStream.current
-          .getTracks()
-          .forEach((track: MediaStreamTrack) => {
-            peerConnection.addTrack(track, localMediaStream.current);
-          });
-      }
-
-      await getRoomDetails();
-    } catch (error) {
-      console.error("Error joining the room:", error);
-    }
-  };
-
-  useEffect(() => {
-    getRoomDetails();
-  }, [getRoomDetails]);
-
-  const deleteARoom = useCallback(async () => {
-    try {
-      if (userName === roomData.owner) {
-        await axios.delete(`http://localhost:8001/room/deleteARoom/${id}`);
-      }
-    } catch (error) {
-      console.error("Error deleting the room:", error);
-    }
-  }, [userName, roomData, id]);
-
-  const toggleMute = (user?: User) => {
-    if (userName === roomData.owner || userName === user?.name) {
-      setUserData((prevUserData) => {
-        const updatedUserData = prevUserData.map((u) => {
-          if (u.name === user?.name) {
-            return { ...u, isMuted: !u.isMuted }; // Toggling the mute status
-          }
-          return u;
-        });
-        return updatedUserData;
-      });
-    }
-  };
-
-  const newUserJoinded = useCallback(({ user }: { user: User }) => {
-    setUserData((prev) => [...prev, user]);
-  }, []);
-
-  const existingUserLeftTheRoom = useCallback(
-    ({ users }: { users: User[] }) => {
-      setUserData(users);
-    },
-    []
-  );
-
-  const handleIceCandidate = ({
-    iceCandidate,
-    peerId,
-  }: {
-    iceCandidate: any;
-    peerId: string;
-  }) => {
-    connections.current[peerId]?.addIceCandidate(iceCandidate);
-  };
-
-  const setRemoteMedia = async ({
-    peerId,
-    remoteSessionDescription,
-  }: {
-    peerId: string;
-    remoteSessionDescription: RTCSessionDescription;
-  }) => {
-    connections.current[peerId]?.setRemoteDescription(
-      new RTCSessionDescription(remoteSessionDescription)
-    );
-    if (remoteSessionDescription.type === "offer") {
-      const connection = connections.current[peerId];
-
-      const answer = await connection.createAnswer();
-      connection.setLocalDescription(answer);
-
-      socket.emit(ACTIONS.RELAY_SDP, {
-        peerId,
-        sessionDescription: answer,
-      });
-    }
-  };
-
-  // useEffect(()=>{
-  //   return()=>{
-  //     localMediaStream.current?.getTracks().forEach(track => {
-  //       track.stop();
-  //     });
-  //   }
-  // })
-
-  const provideRef = ({
-    audioInstance,
-    userId,
-  }: {
-    audioInstance: HTMLAudioElement;
-    userId: string;
-  }) => {
-    audioElements.current[userId] = audioInstance;
-  };
-
-  const userMuteInfo = useCallback(({ users }: { users: User[] }) => {
-    setUserData(users);
-  }, []);
-
-  useEffect(() => {
-    socket.on(socketActions.JOIN, newUserJoinded);
-    socket.on(socketActions.LEAVE, existingUserLeftTheRoom);
-    socket.on(socketActions.MUTE_INFO, userMuteInfo);
-    return () => {
-      socket.off(socketActions.JOIN, newUserJoinded);
-      socket.off(socketActions.LEAVE, existingUserLeftTheRoom);
-      socket.off(socketActions.MUTE_INFO, userMuteInfo);
-    };
-  }, [joinRoom, socket, leaveTheRoom, toggleMute]);
-
-  return (
-    <>
-      <div className="min-h-screen p-10">
-        <div className=" relative mt-10 md:flex items-center justify-end gap-10 p-7 mb-10 ">
-          {roomData?.owner === userName ? (
-            <>
-              <button className="font-roboto text-lg font-bold bg-primary-indigo px-6 py-4 mr-10 max-md:mb-[5%] rounded-xl">
-                Update the Room
-              </button>
-              <button
-                className=" font-roboto text-lg font-bold bg-primary-Darkred px-6 py-4 rounded-xl"
-                onClick={deleteARoom}
-              >
-                <Link
-                  to={`http://localhost:5173/home?userName=${userName}&?profileUrl=${userProfileUrl}`}
-                >
-                  Delete The Room{" "}
-                </Link>
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="font-roboto text-lg font-bold bg-primary-indigo px-6 py-4 rounded-xl">
-                {userAlreadyInRoom === true ? (
-                  <span onClick={leaveTheRoom}>
-                    <Link
-                      onClick={() => {}}
-                      to={`http://localhost:5173/home?userName=${userName}&?profileUrl=${userProfileUrl}`}
-                    >
-                      Leave The Room{" "}
-                    </Link>
-                  </span>
-                ) : (
-                  <span onClick={joinRoom}>Join Room</span>
-                )}
-              </button>
-            </>
-          )}
+// Simple CSS-based voice animation — no AudioContext needed for basic feedback
+const VoiceBars: FC<{ active: boolean }> = ({ active }) => {
+    if (!active) return null;
+    return (
+        <div className="flex items-end gap-[2px] h-5">
+            {[1, 2, 3, 4, 3, 2, 1].map((h, i) => (
+                <div
+                    key={i}
+                    className="w-[3px] rounded-full bg-primary-success"
+                    style={{
+                        height: `${h * 4}px`,
+                        animation: `voicePulse ${0.4 + i * 0.07}s ease-in-out infinite alternate`,
+                    }}
+                />
+            ))}
         </div>
-        <main className=" p-10 grid grid-cols-2 max-md:grid-cols-1 ">
-          <h1 className=" text-indigo-700 font-bold font-montserrat text-3xl ">
-            {roomData?.owner}
-          </h1>
-          <h1 className=" font-bold text-3xl ">{roomData?.title}</h1>
-        </main>
-        <h1 className=" p-10 text-4xl font-bold">Speakers:</h1>{" "}
-        <main className="p-10 grid grid-cols-4 max-md:grid-cols-2 max-sm:grid-cols-1">
-          {userData.map((user, index) => {
-            return (
-              <div
-                key={index}
-                className="flex items-center flex-col justify-between"
-              >
-                <img
-                  src={user?.userProfileUrl || DummyLogo}
-                  alt="User Profile"
-                  className="rounded-full w-[100px] h-[100px] cursor-pointer p-4"
-                />
-                <audio
-                  autoPlay
-                  muted={user?.isMuted}
-                  ref={(instance: HTMLAudioElement) => {
-                    // Need Specify the type for ref instance for audio transmission
-                    provideRef({ audioInstance: instance, userId: user._id });
-                  }}
-                  className=" max-md:hidden "
-                  controls
-                />
-                <button
-                  className="bg-blue-600 text-lg font-poppins rounded-full mt-2 mb-2 px-7 py-3"
-                  onClick={() => {
-                    socket.emit(socketActions.MUTE, {
-                      roomId: id,
-                      userId: user._id,
-                    });
-                    toggleMute(user);
-                  }}
-                >
-                  {user?.isMuted === true ? (
-                    <Icon component={MicOffIcon} />
-                  ) : (
-                    <Icon component={MicOutlinedIcon} />
-                  )}
-                </button>
-                <h1 className="font-roboto text-2xl font-semibold text-primary-pink-500 mb-10">
-                  {user?.name.length > 10 ? user.name.split("") : user.name}
-                </h1>
-              </div>
+    );
+};
+
+const RoomPage: FC<Props> = () => {
+    const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
+    const [roomData, setRoomData] = useState<RoomData>({ owner: "", title: "", speakers: [], roomType: "public" });
+    const [userData, setUserData] = useState<User[]>([]);
+    const [inRoom, setInRoom] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState("");
+    const [inviteStatus, setInviteStatus] = useState<string | null>(null);
+
+    const { userName, email } = useSelector(
+        (state: { user: { userName: string; email: string } }) => state.user
+    );
+
+    // All WebRTC state in refs to avoid stale closures
+    const pcs = useRef<Record<string, RTCPeerConnection>>({});
+    const localStream = useRef<MediaStream | null>(null);
+    const audioEls = useRef<Record<string, HTMLAudioElement>>({});
+
+    if (!userName) { navigate("/signIn"); return null; }
+
+    const createPC = (peerId: string): RTCPeerConnection => {
+        if (pcs.current[peerId]) return pcs.current[peerId];
+
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+        pc.onicecandidate = ({ candidate }) => {
+            if (candidate) {
+                console.log("[ICE] sending candidate to", peerId);
+                socket.emit(socketActions.RELAY_ICE, { iceCandidate: candidate, peerId });
+            }
+        };
+
+        pc.oniceconnectionstatechange = () =>
+            console.log(`[ICE state ${peerId}]`, pc.iceConnectionState);
+
+        pc.ontrack = (e) => {
+            console.log("[ontrack] from", peerId, "streams:", e.streams.length);
+            const stream = e.streams[0] ?? new MediaStream([e.track]);
+
+            // Get or create audio element
+            let el = audioEls.current[peerId];
+            if (!el) {
+                el = document.createElement("audio");
+                el.autoplay = true;
+                (el as any).playsInline = true;
+                document.body.appendChild(el);
+                audioEls.current[peerId] = el;
+            }
+            el.srcObject = stream;
+            el.play().catch(err => console.error("[audio play]", err));
+        };
+
+        pcs.current[peerId] = pc;
+        return pc;
+    };
+
+    const addTracks = (pc: RTCPeerConnection) => {
+        if (!localStream.current) { console.warn("[addTracks] no local stream yet"); return; }
+        const existingSenders = pc.getSenders().map(s => s.track);
+        localStream.current.getTracks().forEach(track => {
+            if (!existingSenders.includes(track)) {
+                console.log("[addTracks] adding track", track.kind);
+                pc.addTrack(track, localStream.current!);
+            }
+        });
+    };
+
+    const closePC = (peerId: string) => {
+        pcs.current[peerId]?.close();
+        delete pcs.current[peerId];
+        const el = audioEls.current[peerId];
+        if (el) { el.srcObject = null; el.remove(); delete audioEls.current[peerId]; }
+    };
+
+    // Fetch room details — auto-join mic if already a speaker (e.g. room owner)
+    useEffect(() => {
+        axios.get<{ data: RoomData; userData: User[]; success: boolean }>(
+            `${import.meta.env.VITE_API_URL}/room/getRoomDetails/${id}`
+        ).then(async ({ data: { data, userData: users, success } }) => {
+            if (!success) { navigate("/home"); return; }
+            setRoomData(data);
+            setUserData(users);
+            const alreadyIn = data.speakers.includes(userName);
+            if (alreadyIn) {
+                // Acquire mic and join signaling without hitting joinRoom API again
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                    localStream.current = stream;
+                    const me = users.find(u => u.name === userName);
+                    socket.emit(socketActions.JOIN, { roomId: id, user: me ?? { name: userName } });
+                    setInRoom(true);
+                } catch (err) {
+                    console.error("[auto-join mic]", err);
+                    setInRoom(true); // still mark in room even if mic denied
+                }
+            }
+        }).catch(console.error);
+    }, [id]);
+
+    // Socket signaling
+    useEffect(() => {
+        // New joiner: existing peers tell us about themselves — WE create offers
+        const onExistingPeers = async ({ peers }: { peers: { peerId: string; peerUser: User }[] }) => {
+            console.log("[existing-peers]", peers.length, "peers");
+            for (const { peerId, peerUser } of peers) {
+                if (!peerUser?.name) continue;
+                setUserData(prev =>
+                    prev.some(u => u.name === peerUser.name)
+                        ? prev.map(u => u.name === peerUser.name ? { ...u, socketId: peerId } : u)
+                        : [...prev, { ...peerUser, socketId: peerId }]
+                );
+                const pc = createPC(peerId);
+                addTracks(pc);
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                console.log("[offer] sending to", peerId);
+                socket.emit(socketActions.RELAY_SDP, { sessionDescription: offer, peerId });
+            }
+        };
+
+        const onNewPeer = ({ peerId, peerUser }: { peerId: string; peerUser: User; createOffer: boolean }) => {
+            console.log("[new-peer]", peerId);
+            if (!peerUser?.name) return;
+            setUserData(prev =>
+                prev.some(u => u.name === peerUser.name)
+                    ? prev.map(u => u.name === peerUser.name ? { ...u, socketId: peerId } : u)
+                    : [...prev, { ...peerUser, socketId: peerId }]
             );
-          })}
-        </main>
-      </div>
-    </>
-  );
+            const pc = createPC(peerId);
+            addTracks(pc);
+        };
+
+        const onSDP = async ({ peerId, sessionDescription }: { peerId: string; sessionDescription: RTCSessionDescriptionInit }) => {
+            console.log("[sdp]", sessionDescription.type, "from", peerId);
+            const pc = pcs.current[peerId];
+
+            if (sessionDescription.type === "answer") {
+                // Only process answer if we have a PC that sent an offer
+                if (!pc || pc.signalingState !== "have-local-offer") {
+                    console.warn("[sdp] ignoring answer — no pending offer for", peerId);
+                    return;
+                }
+                await pc.setRemoteDescription(new RTCSessionDescription(sessionDescription));
+                return;
+            }
+
+            // It's an offer — create PC if needed, add tracks, send answer
+            const targetPc = pc ?? createPC(peerId);
+            if (!pc) addTracks(targetPc);
+            addTracks(targetPc);
+            await targetPc.setRemoteDescription(new RTCSessionDescription(sessionDescription));
+            const answer = await targetPc.createAnswer();
+            await targetPc.setLocalDescription(answer);
+            console.log("[answer] sending to", peerId);
+            socket.emit(socketActions.RELAY_SDP, { sessionDescription: answer, peerId });
+        };
+
+        const onICE = ({ peerId, iceCandidate }: { peerId: string; iceCandidate: RTCIceCandidateInit }) => {
+            pcs.current[peerId]?.addIceCandidate(new RTCIceCandidate(iceCandidate))
+                .catch(e => console.error("[addIceCandidate]", e));
+        };
+
+        const onJoin = ({ users }: { users: User[] }) => {
+            setUserData(prev => {
+                const socketIdMap = Object.fromEntries(prev.filter(u => u.name && u.socketId).map(u => [u.name, u.socketId]));
+                const merged = users.filter(u => u.name).map(u => ({ ...u, socketId: socketIdMap[u.name!] ?? u.socketId }));
+                // dedupe by name, keep last
+                return Array.from(new Map(merged.map(u => [u.name, u])).values());
+            });
+        };
+
+        const onLeave = ({ users }: { users: User[] }) => {
+            const currentIds = new Set(users.map(u => u.socketId).filter(Boolean));
+            Object.keys(pcs.current).forEach(pid => { if (!currentIds.has(pid)) closePC(pid); });
+            setUserData(users);
+        };
+
+        const onMuteInfo = ({ users }: { users: User[] }) => setUserData(users);
+        const onRemovePeer = ({ users }: { users: User[] }) => setUserData(users);
+        const onKicked = () => { void doLeave(); navigate("/home"); };
+
+        socket.on("existing-peers", onExistingPeers);
+        socket.on("new-peer", onNewPeer);
+        socket.on(socketActions.SESSION_DESCRIPTION, onSDP);
+        socket.on(socketActions.ICE_CANDIDATE, onICE);
+        socket.on(socketActions.JOIN, onJoin);
+        socket.on(socketActions.LEAVE, onLeave);
+        socket.on(socketActions.MUTE_INFO, onMuteInfo);
+        socket.on(socketActions.REMOVE_PEER, onRemovePeer);
+        socket.on("kicked", onKicked);
+
+        return () => {
+            socket.off("existing-peers", onExistingPeers);
+            socket.off("new-peer", onNewPeer);
+            socket.off(socketActions.SESSION_DESCRIPTION, onSDP);
+            socket.off(socketActions.ICE_CANDIDATE, onICE);
+            socket.off(socketActions.JOIN, onJoin);
+            socket.off(socketActions.LEAVE, onLeave);
+            socket.off(socketActions.MUTE_INFO, onMuteInfo);
+            socket.off(socketActions.REMOVE_PEER, onRemovePeer);
+            socket.off("kicked", onKicked);
+        };
+    }, []); // empty deps — handlers use refs, no stale closure issues
+
+    const joinRoom = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            localStream.current = stream;
+            console.log("[joinRoom] mic acquired, tracks:", stream.getTracks().length);
+
+            const { data: { userData: u } } = await axios.put(
+                `${import.meta.env.VITE_API_URL}/room/joinRoom/${id}`, { email }
+            );
+            // Emit JOIN — server will send existing-peers back, then we create offers
+            socket.emit(socketActions.JOIN, { roomId: id, user: u });
+            setInRoom(true);
+        } catch (err) {
+            console.error("[joinRoom]", err);
+        }
+    };
+
+    const doLeave = async () => {
+        localStream.current?.getTracks().forEach(t => t.stop());
+        localStream.current = null;
+        Object.keys(pcs.current).forEach(closePC);
+        try {
+            const { data: { userData: u } } = await axios.put(
+                `${import.meta.env.VITE_API_URL}/room/leaveRoom/${id}`, { email }
+            );
+            socket.emit(socketActions.LEAVE, { user: u, roomId: id });
+        } catch { /* ignore */ }
+        setInRoom(false);
+    };
+
+    const leaveRoom = async () => { await doLeave(); navigate("/home"); };
+
+    const toggleMute = () => {
+        if (!localStream.current) return;
+        const next = !isMuted;
+        localStream.current.getAudioTracks().forEach(t => { t.enabled = !next; });
+        setIsMuted(next);
+        // Update local userData immediately so UI reflects change without waiting for server
+        setUserData(prev => prev.map(u => u.name === userName ? { ...u, isMuted: next } : u));
+        const self = userData.find(u => u.name === userName);
+        if (self?._id) socket.emit(socketActions.MUTE, { roomId: id, userId: String(self._id) });
+    };
+
+    const deleteRoom = async () => {
+        await axios.delete(`${import.meta.env.VITE_API_URL}/room/deleteARoom/${id}`);
+        await doLeave();
+        navigate("/home");
+    };
+
+    const removeUser = (user: User) => {
+        if (user._id) socket.emit(socketActions.REMOVE_PEER, { peerId: user._id, userName, roomId: id });
+    };
+
+    const sendInvite = async () => {
+        if (!inviteEmail.trim()) return;
+        try {
+            const { data } = await axios.post(`${import.meta.env.VITE_API_URL}/room/invite/${id}`, {
+                ownerEmail: email, inviteEmail: inviteEmail.trim()
+            });
+            setInviteStatus(data.success ? "Invite sent!" : data.msg);
+            if (data.success) setInviteEmail("");
+        } catch { setInviteStatus("Failed to send invite."); }
+        setTimeout(() => setInviteStatus(null), 3000);
+    };
+
+    const isOwner = roomData.owner === userName;
+
+    return (
+        <>
+            <style>{`@keyframes voicePulse { from { transform: scaleY(0.4); } to { transform: scaleY(1.4); } }`}</style>
+
+            <div className="min-h-screen px-4 py-6 max-w-4xl mx-auto pb-28">
+                {/* Room header */}
+                <div className="bg-secondary-black-600 rounded-2xl p-5 mb-6">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div>
+                            <p className="text-secondary-white text-xs font-poppins mb-1">Hosted by</p>
+                            <h2 className="text-primary-indigo font-bold font-montserrat text-xl">{roomData.owner}</h2>
+                            <h1 className="font-bold text-2xl mt-1">{roomData.title}</h1>
+                        </div>
+                        <div className="flex gap-2 flex-wrap items-center">
+                            {isOwner ? (
+                                <button onClick={deleteRoom} className="bg-red-500 hover:bg-red-600 text-white font-poppins text-sm font-semibold px-5 py-2 rounded-full">
+                                    End Room
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={inRoom ? leaveRoom : joinRoom}
+                                    className={`${inRoom ? "bg-red-500 hover:bg-red-600" : "bg-primary-success hover:opacity-90"} text-white font-poppins text-sm font-semibold px-5 py-2 rounded-full`}
+                                >
+                                    {inRoom ? "Leave" : "Join Room 🎙️"}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    {/* Invite UI — shown to owner for non-public rooms */}
+                    {isOwner && roomData.roomType !== "public" && (
+                        <div className="mt-4 flex gap-2">
+                            <input
+                                type="email"
+                                placeholder="Invite by email..."
+                                value={inviteEmail}
+                                onChange={e => setInviteEmail(e.target.value)}
+                                onKeyDown={e => e.key === "Enter" && sendInvite()}
+                                className="flex-1 bg-primary-black-700 text-white px-3 py-2 rounded-xl text-sm font-poppins outline-none border border-primary-black-400 focus:border-primary-indigo transition-colors"
+                            />
+                            <button onClick={sendInvite} disabled={!inviteEmail.trim()}
+                                className="bg-primary-indigo hover:opacity-90 px-4 py-2 rounded-xl text-sm font-poppins font-semibold disabled:opacity-50">
+                                Invite
+                            </button>
+                        </div>
+                    )}
+                    {inviteStatus && <p className="text-xs font-poppins mt-2 text-primary-success">{inviteStatus}</p>}
+                </div>
+
+                {/* Speakers grid */}
+                <p className="font-poppins font-semibold text-secondary-white text-xs mb-4 uppercase tracking-widest">
+                    Speakers · {userData.length}
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-5">
+                    {Array.from(new Map(userData.filter(u => u.name).map(u => [u.socketId ?? u._id ?? u.name, u])).values()).map((user) => {
+                        const isMe = user.name === userName;
+                        const speaking = inRoom && !user.isMuted;
+                        return (
+                            <div key={user.socketId ?? user._id ?? user.name} className="flex flex-col items-center gap-2">
+                                <div className="relative">
+                                    <img
+                                        src={user.userProfileUrl || DummyLogo}
+                                        alt={user.name}
+                                        className={`w-16 h-16 rounded-full object-cover border-2 transition-all ${speaking ? "border-primary-success shadow-[0_0_12px_2px_rgba(32,189,95,0.4)]" : "border-transparent"}`}
+                                    />
+                                    {user.isMuted && (
+                                        <span className="absolute -bottom-1 -right-1 bg-red-500 rounded-full p-0.5">
+                                            <MicOffIcon sx={{ fontSize: 12 }} />
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="font-poppins text-xs text-center font-semibold truncate w-full">
+                                    {isMe ? `${user.name} (you)` : user.name.slice(0, 10) + (user.name.length > 10 ? "…" : "")}
+                                </p>
+                                <VoiceBars active={speaking} />
+                                {isOwner && !isMe && (
+                                    <button onClick={() => removeUser(user)} className="text-red-400 hover:text-red-300" title="Remove">
+                                        <PersonRemoveIcon sx={{ fontSize: 16 }} />
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Floating mute button */}
+                {inRoom && (
+                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+                        <button
+                            onClick={toggleMute}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-full font-poppins font-semibold text-sm shadow-2xl ${isMuted ? "bg-red-500" : "bg-primary-indigo"}`}
+                        >
+                            {isMuted ? <MicOffIcon fontSize="small" /> : <MicOutlinedIcon fontSize="small" />}
+                            {isMuted ? "Unmute" : "Mute"}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </>
+    );
 };
 
 export default RoomPage;

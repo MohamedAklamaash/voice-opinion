@@ -17,6 +17,10 @@ const roomModal = new mongoose.Schema({
         type:String,
         required:true,
         enum:["social","public","private"]
+    },
+    invitedEmails:{
+        type:[String],
+        default:[],
     }
 })
 

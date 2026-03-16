@@ -1,13 +1,12 @@
-import { Icon } from "@mui/material";
 import appLogo from "../assets/Logo.webp";
-import KeyboardVoiceIcon from "@mui/icons-material/KeyboardVoice";
-import { NavigateFunction, useNavigate } from "react-router-dom";
-import MenuIcon from "@mui/icons-material/Menu";
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Theme } from "../App";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
-import { Link } from "react-router-dom";
+import MenuIcon from "@mui/icons-material/Menu";
+import CloseIcon from "@mui/icons-material/Close";
+import DummyLogo from "../assets/DummyLogo.jpeg";
 
 type Props = {
   name: string;
@@ -15,146 +14,75 @@ type Props = {
   primaryTheme: Theme;
   setprimaryTheme: (theme: Theme) => void;
 };
+
 const Navbar = ({ name, imgSrc, setprimaryTheme, primaryTheme }: Props) => {
-  const navigate: NavigateFunction = useNavigate();
-  const [isMenuToggled, setisMenuToggled] = useState<boolean>(false);
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const isLoggedIn = !!name;
 
   return (
-    <div
-      className={` p-4 top-0 shadow-2xl  w-full flex items-center justify-between`}
-    >
-      <nav className=" flex items-center justify-center">
-        <img
-          className=" rounded-full w-[100px] z-[1000] p-3 cursor-pointer "
-          onClick={() => {
-            navigate("/");
-          }}
-          src={appLogo}
-          alt="Logo"
-        />
-        <h1
-          className=" font-montserrat cursor-pointer text-gradient-violet font-bold text-2xl "
-          onClick={() => {
-            navigate("/");
-          }}
+    <nav className="sticky top-0 z-50 px-4 py-3 flex items-center justify-between border-b border-primary-black-400 backdrop-blur-sm bg-opacity-90 bg-primary-black-700">
+      {/* Logo */}
+      <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(isLoggedIn ? "/home" : "/")}>
+        <img src={appLogo} className="w-9 h-9 rounded-full" alt="Logo" />
+        <span className="font-montserrat font-bold text-lg text-gradient-violet hidden sm:block">Voice Ur Opinion</span>
+      </div>
+
+      {/* Desktop right */}
+      <div className="hidden md:flex items-center gap-4">
+        <button
+          onClick={() => setprimaryTheme(primaryTheme === "dark" ? "light" : "dark")}
+          className="p-2 rounded-full hover:bg-secondary-black-600 transition-colors"
         >
-          Voice Ur Opinion{" "}
-          <Icon className=" text-primary-white" component={KeyboardVoiceIcon} />{" "}
-        </h1>
-      </nav>
-      <nav className=" flex items-center max-md:hidden ">
-        <h1 className=" p-2  font-poppins  text-2xl font-bold text-gradient-violet hover:tracking-wider ">
-          {name.charAt(0).toUpperCase() + name.slice(1)}
-        </h1>
-        <img
-          src={`${imgSrc}`}
-          alt="Profile Pic"
-          className="w-[100px] h-[100px] rounded-full"
-          onClick={() => {
-            navigate(`/${imgSrc}`);
-          }}
-        />
-        <h1
-          onClick={() => {
-            localStorage.clear();
-            window.location.href = "/";
-          }}
-          className=" text-2xl px-3 text-primary-indigo   font-bold cursor-pointer font-roboto "
-        >
-          LogOut
-        </h1>
-        <div className=" p-4">
-          {primaryTheme === "dark" ? (
-            <Icon
-              component={DarkModeIcon}
-              fontSize="large"
-              className=" cursor-pointer"
-              onClick={() => setprimaryTheme("light")}
-            />
-          ) : (
-            <Icon
-              component={LightModeIcon}
-              fontSize="large"
-              className=" cursor-pointer"
-              onClick={() => setprimaryTheme("dark")}
-            />
+          {primaryTheme === "dark" ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
+        </button>
+        {isLoggedIn && (
+          <>
+            <div className="flex items-center gap-2">
+              <img src={imgSrc || DummyLogo} className="w-8 h-8 rounded-full object-cover" alt="avatar" />
+              <span className="font-poppins text-sm font-semibold">{name.charAt(0).toUpperCase() + name.slice(1)}</span>
+            </div>
+            <button
+              onClick={() => { localStorage.clear(); window.location.href = "/"; }}
+              className="text-sm font-poppins text-red-400 hover:text-red-300 transition-colors"
+            >
+              Log out
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Mobile hamburger */}
+      <button className="md:hidden p-2" onClick={() => setMenuOpen(!menuOpen)}>
+        {menuOpen ? <CloseIcon /> : <MenuIcon />}
+      </button>
+
+      {/* Mobile menu */}
+      {menuOpen && (
+        <div className="absolute top-full left-0 right-0 bg-primary-black-700 border-b border-primary-black-400 p-4 flex flex-col gap-4 md:hidden">
+          {isLoggedIn && (
+            <div className="flex items-center gap-3">
+              <img src={imgSrc || DummyLogo} className="w-10 h-10 rounded-full object-cover" alt="avatar" />
+              <span className="font-poppins font-semibold">{name.charAt(0).toUpperCase() + name.slice(1)}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <span className="text-secondary-white text-sm font-poppins">{primaryTheme === "dark" ? "Dark mode" : "Light mode"}</span>
+            <button onClick={() => setprimaryTheme(primaryTheme === "dark" ? "light" : "dark")} className="p-2 rounded-full hover:bg-secondary-black-600">
+              {primaryTheme === "dark" ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
+            </button>
+          </div>
+          {isLoggedIn && (
+            <button
+              onClick={() => { localStorage.clear(); window.location.href = "/"; }}
+              className="text-left text-red-400 font-poppins text-sm hover:text-red-300"
+            >
+              Log out
+            </button>
           )}
         </div>
-      </nav>
-      <nav className=" max-md:block hidden ">
-        {isMenuToggled ? (
-          <div className=" bg-primary-indigo absolute top-0 right-0 w-[100%] h-[100%]  bg-[rgba(2,1,10,0.84)]  text-white">
-            <p
-              onClick={() => {
-                setisMenuToggled(!isMenuToggled);
-              }}
-              className=" text-end text-4xl p-10 cursor-pointer"
-            >
-              X
-            </p>
-            <div className=" flex items-center flex-col gap-10 ">
-              <h1 className=" p-2  font-poppins text-center tracking-wide text-lg font-bold text-white">
-                {name.charAt(0).toUpperCase() + name.slice(1)}
-              </h1>
-              <Link to={`${imgSrc}`} target="_blank">
-                <img
-                  src={`${imgSrc}`}
-                  alt="Profile Pic"
-                  className="w-[50px] h-[50px] rounded-full mx-auto "
-                />
-              </Link>
-              <h1
-                onClick={() => {
-                  localStorage.clear();
-                  window.location.href = "/";
-                }}
-                className=" text-2xl px-3 font-bold cursor-pointer font-roboto text-center "
-              >
-                LogOut
-              </h1>
-            </div>
-            <div className=" mt-10">
-              {primaryTheme === "dark" ? (
-                <div className=" flex space-x-4 justify-center items-center">
-                  <h1>
-                    {primaryTheme.charAt(0).toUpperCase() +
-                      primaryTheme.slice(1)}
-                  </h1>
-                  <Icon
-                    component={DarkModeIcon}
-                    fontSize="large"
-                    className=" cursor-pointer"
-                    onClick={() => setprimaryTheme("light")}
-                  />
-                </div>
-              ) : (
-                <div className=" flex space-x-4 justify-center items-center">
-                  <h1>
-                    {primaryTheme.charAt(0).toUpperCase() +
-                      primaryTheme.slice(1)}
-                  </h1>
-                  <Icon
-                    component={LightModeIcon}
-                    fontSize="large"
-                    className=" cursor-pointer"
-                    onClick={() => setprimaryTheme("dark")}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <Icon
-            component={MenuIcon}
-            className=" cursor-pointer"
-            fontSize="large"
-            onClick={() => {
-              setisMenuToggled(!isMenuToggled);
-            }}
-          />
-        )}
-      </nav>
-    </div>
+      )}
+    </nav>
   );
 };
 

@@ -1,6 +1,7 @@
 import { RoomSchema } from "../models/RoomModal"
 import { Request, Response } from "express";
 import { UserSchema } from "../models/UserDataModel";
+import { io } from "../index";
 
 //create a room,join a room,owner can update the room details,delete the room,get room details
 
@@ -17,6 +18,7 @@ export const createARoom = async (req: Request, res: Response) => {
         const data = await RoomSchema.create({
             title, owner: owner?.name, roomType, speakers: [owner?.name]
         });
+        if (roomType === "public") io.emit("new-room", data);
         return res.status(200).json({ success: true, msg: "Room created successfully", data });
     } catch (error) {
         console.log("Error in creating the room");
@@ -42,10 +44,10 @@ export const getRoomDetails = async (req: Request, res: Response) => {
         let userData: Array<User> = [];
 
         await Promise.all(data.speakers.map(async (name) => {
-            const user: User = await UserSchema.findOne({ name });
+            const user = await UserSchema.findOne({ name });
             // the users that aren't activated will be null
             if(user!=null){
-                userData.push(user);
+                userData.push(user as any);
             }
         }));
 
@@ -83,6 +85,33 @@ export const deleteARoom = async (req: Request, res: Response) => {
         console.log("Error in deleting the room");
     }
 }
+
+export const inviteToRoom = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { ownerEmail, inviteEmail } = req.body;
+        const owner = await UserSchema.findOne({ email: ownerEmail });
+        const room = await RoomSchema.findById(id);
+        if (!room || !owner) return res.status(404).json({ success: false, msg: "Room or owner not found" });
+        if (room.owner !== owner.name) return res.status(403).json({ success: false, msg: "Only owner can invite" });
+        if (!room.invitedEmails.includes(inviteEmail)) {
+            await room.updateOne({ $push: { invitedEmails: inviteEmail } });
+        }
+        return res.status(200).json({ success: true, msg: "Invited successfully" });
+    } catch (error) {
+        return res.status(500).json({ success: false });
+    }
+};
+
+export const getPendingInvites = async (req: Request, res: Response) => {
+    try {
+        const { email } = req.params;
+        const rooms = await RoomSchema.find({ invitedEmails: email });
+        return res.status(200).json({ success: true, data: rooms });
+    } catch (error) {
+        return res.status(500).json({ success: false });
+    }
+};
 
 export const updateRoom = async (req: Request, res: Response) => {
     try {

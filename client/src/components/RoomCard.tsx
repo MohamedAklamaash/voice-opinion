@@ -1,33 +1,21 @@
 import DummyLogo from "../assets/DummyLogo.jpeg";
+import PeopleIcon from "@mui/icons-material/People";
 
-type Props = {
-  title: string;
-  owner: string;
-};
+type Props = { title: string; owner: string; };
 
-//view specific details of the card in the Component
-//This card lies in the Main Home
-
-const RoomCard = ({ title, owner }: Props) => {
-  return (
-    <div className="mb-10 mt-3 flex items-center justify-center shadow-2xl p-5 ">
-      <div className="grid grid-cols-4  gap-4">
-        <div className="col-span-2">
-          <h1 className="font-montserrat font-semibold  text-2xl text-primary-indigo ">
-            {title}
-          </h1>
-        </div>
-        <div className="col-span-1">
-          <img
-            src={DummyLogo}
-            alt="DummtLogo"
-            className="rounded-full w-32 h-32 object-scale-down  "
-          />
-          <span className="font-poppins text-lg">{owner}</span>
-        </div>
-      </div>
+const RoomCard = ({ title, owner }: Props) => (
+  <div className="bg-secondary-black-600 hover:bg-primary-black-400 transition-colors rounded-2xl p-4 w-full cursor-pointer">
+    <h2 className="font-montserrat font-bold text-base text-white mb-3 line-clamp-2">{title}</h2>
+    <div className="flex items-center gap-2">
+      <img src={DummyLogo} alt={owner} className="w-7 h-7 rounded-full object-cover" />
+      <span className="font-poppins text-xs text-secondary-white truncate">{owner}</span>
     </div>
-  );
-};
+    <div className="flex items-center gap-1 mt-2 text-secondary-white">
+      <PeopleIcon sx={{ fontSize: 14 }} />
+      <span className="font-poppins text-xs">Live</span>
+      <span className="w-2 h-2 rounded-full bg-primary-success ml-1 animate-pulse" />
+    </div>
+  </div>
+);
 
 export default RoomCard;

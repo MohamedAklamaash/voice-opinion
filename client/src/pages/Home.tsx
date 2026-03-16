@@ -1,47 +1,50 @@
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
+
 interface Props {
   setstepPageCount: (num: number) => void;
   stepPageCount: number;
 }
+
 const Home = ({ stepPageCount, setstepPageCount }: Props) => {
   const navigate = useNavigate();
-  const { userName, email, userProfileUrl } = useSelector(
-    (state) => state.user
+  const { userName, userProfileUrl } = useSelector(
+    (state: { user: { userName: string; userProfileUrl: string } }) => state.user
   );
+
   if (userName) {
-    window.location.href = `http://localhost:5173/home?userName=${userName}&?profileUrl=${userProfileUrl}`;
+    window.location.href = `/home?userName=${userName}&profileUrl=${userProfileUrl}`;
+    return null;
   }
 
   return (
-    <div className=" min-h-screen mx-auto mt-[10%] ">
-      <section className=" md:w-[40%] max-md:w-[60%] flex flex-col shadow-2xl justify-center items-center max-md:mt-[10%] md:ml-[30%] max-md:ml-[24%] ">
-        <h1 className=" font-poppins text-xl mb-10 text-center">
-          Voice Your Opinion 🔥
-        </h1>
-        <h1 className=" tracking-wider mb-10 ml-10 mr-10 ">
-          We’re working hard to get Voice Your Opinion ready for everyone! While
-          we wrap up the finishing youches, we’re adding people gradually to
-          make sure nothing breaks :)
-        </h1>
-        <button
-          className=" rounded-full bg-primary-indigo px-10 py-4 mb-10 font - montserrat "
-          onClick={() => {
-            setstepPageCount(stepPageCount + 1);
-            navigate("/signIn");
-          }}
-        >
-          Get your username {`->`}
-        </button>
-        <a
-          className=" mb-10 tracking-widest font-poppins cursor-pointer text-blue-500 "
-          onClick={() => {
-            navigate("/signIn");
-          }}
-        >
-          Have an invite text?SignIn
-        </a>
-      </section>
+    <div className="h-screen flex items-center justify-center px-4 overflow-hidden">
+      <div className="w-full max-w-md text-center">
+        <div className="mb-8">
+          <span className="text-6xl">🎙️</span>
+          <h1 className="text-4xl font-bold font-montserrat mt-4 mb-2">Voice Ur Opinion</h1>
+          <p className="text-secondary-white text-sm font-poppins">
+            Drop into live audio rooms. Talk, listen, vibe.
+          </p>
+        </div>
+        <div className="bg-secondary-black-600 rounded-2xl p-8 shadow-2xl">
+          <p className="text-secondary-white font-poppins text-sm mb-8 leading-relaxed">
+            We're rolling out access gradually to keep things smooth. Jump in and start talking.
+          </p>
+          <button
+            className="w-full bg-primary-indigo hover:opacity-90 transition-opacity rounded-full py-4 font-montserrat font-bold text-lg mb-4"
+            onClick={() => { setstepPageCount(stepPageCount + 1); navigate("/signIn"); }}
+          >
+            Get Started →
+          </button>
+          <button
+            className="w-full text-primary-indigo font-poppins text-sm hover:underline"
+            onClick={() => navigate("/signIn")}
+          >
+            Already have an account? Sign in
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

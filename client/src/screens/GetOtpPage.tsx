@@ -1,114 +1,120 @@
 import { ChangeEvent, KeyboardEvent, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
-import { setEmail, setPhoneNumber } from "../store/UserSlice";
+import { setEmail, setPhoneNumber, setUserName, setProfileUrl } from "../store/UserSlice";
 import axios from "axios";
 import { Theme } from "../App";
+
 type Props = {
   setstepPageCount: (num: number) => void;
   stepPageCount: number;
   primaryTheme: Theme;
 };
 
-const GetOtpPage: React.FC<Props> = ({
-  setstepPageCount,
-  stepPageCount,
-  primaryTheme,
-}: Props) => {
+const GetOtpPage: React.FC<Props> = ({ setstepPageCount, stepPageCount }: Props) => {
   const navigate = useNavigate();
-  const queryString = window.location.search;
-  const urlParams = new URLSearchParams(queryString);
+  const urlParams = new URLSearchParams(window.location.search);
   const phoneNumber = urlParams.get("phoneNumber");
   const email = urlParams.get("email");
-
   const dispatch = useDispatch();
   dispatch(setPhoneNumber(phoneNumber));
-  const [otp, setOtp] = useState<string>("");
-  const otpInputs = useRef<HTMLInputElement | null>(null);
+
+  const [otp, setOtp] = useState<string[]>(["", "", "", ""]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const otpInputs = useRef<HTMLInputElement[]>([]);
 
   const VerifyOtp = async () => {
-    const {
-      data: { success },
-    } = await axios.post<{ success: boolean }>(
-      `http://localhost:8001/Otp/verify-otp`,
-      {
-        email,
-        otp,
-      }
-    );
+    const otpStr = otp.join("");
+    if (otpStr.length < 4) { setError("Enter all 4 digits"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await axios.post<{
+        success: boolean;
+        email: string;
+        existingUser: boolean;
+        name?: string;
+        userProfileUrl?: string;
+      }>(`${import.meta.env.VITE_API_URL}/Otp/verify-otp`, { email, otp: otpStr });
 
-    if (!success) {
-      navigate("/signIn");
+      if (!data.success) { setError("Invalid OTP. Please try again."); setLoading(false); return; }
+
+      dispatch(setEmail(email));
+
+      if (data.existingUser && data.name) {
+        // Returning user — skip name/photo screens, go straight to home
+        dispatch(setUserName(data.name));
+        if (data.userProfileUrl) dispatch(setProfileUrl(data.userProfileUrl));
+        navigate("/home");
+        return;
+      }
+
+      setstepPageCount(stepPageCount + 1);
+      navigate("/enterName");
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setLoading(false);
     }
-    dispatch(setEmail(email));
-    setstepPageCount(stepPageCount + 1);
-    navigate("/enterName");
   };
 
-  const handleOtpChange =
-    (index: number) => (e: ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
+  const handleOtpChange = (index: number) => (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/, "");
+    if (!value) return;
+    const newOtp = [...otp];
+    newOtp[index] = value[value.length - 1];
+    setOtp(newOtp);
+    if (index < 3) otpInputs.current[index + 1]?.focus();
+  };
 
-      // Allow only single-digit numeric input
-      if (/^[0-9]$/.test(value)) {
-        const newOtp = otp.split("");
-        newOtp[index] = value;
-        setOtp(newOtp.join(""));
-      }
-
-      // Move to the next input field
-      if (index < 3 && otpInputs.current && otpInputs.current[index + 1]) {
-        otpInputs.current[index + 1]?.focus();
-      }
-    };
-
-  const handleKeyDown =
-    (index: number) => (e: KeyboardEvent<HTMLInputElement>) => {
-      // Move to the previous input field on backspace
-      if (e.key === "Backspace" && index > 0 && otpInputs.current) {
-        otpInputs.current[index - 1]?.focus();
-      }
-    };
+  const handleKeyDown = (index: number) => (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      const newOtp = [...otp];
+      newOtp[index] = "";
+      setOtp(newOtp);
+      if (index > 0) otpInputs.current[index - 1]?.focus();
+    }
+    if (e.key === "Enter") VerifyOtp();
+  };
 
   return (
-    <div className="min-h-screen">
-      <section className="flex items-center justify-center max-md:mt-[40%] md:mt-[6%]">
-        <section className="mb-10 mt-[10%]">
-          <h1 className="font-poppins text-lg">
-            Enter the OTP Sent To Your Number
-          </h1>
-        </section>
-      </section>
-      <section className="flex items-start justify-center gap-2">
-        {[...Array(4)].map((_, index) => (
-          <input
-            key={index}
-            type="text"
-            value={otp[index] || ""}
-            name={`otp-${index}`}
-            maxLength={1}
-            alt={`otp-inp-unit-${index}`}
-            className={`w-12 h-10 ${
-              primaryTheme === "dark"
-                ? "bg-primary-white text-primary-black-700"
-                : "bg-primary-black-700 text-primary-white"
-            } p-3 text-center`}
-            onChange={handleOtpChange(index)}
-            onKeyDown={handleKeyDown(index)}
-            ref={(input) => (otpInputs.current = input)}
-          />
-        ))}
-      </section>
-      <section className=" mt-10 ml-[40%] ">
+    <div className="h-screen flex items-center justify-center px-4 overflow-hidden">
+      <div className="w-full max-w-sm text-center">
+        <span className="text-5xl">📬</span>
+        <h1 className="text-2xl font-bold font-montserrat mt-4 mb-1">Check your inbox</h1>
+        <p className="text-secondary-white text-sm font-poppins mb-8">
+          We sent a 4-digit OTP to <span className="text-white font-semibold">{email || phoneNumber}</span>
+        </p>
+        <div className="flex justify-center gap-3 mb-6">
+          {otp.map((digit, index) => (
+            <input
+              key={index}
+              type="text"
+              inputMode="numeric"
+              value={digit}
+              maxLength={1}
+              className="w-14 h-14 bg-secondary-black-600 text-white text-2xl font-bold text-center rounded-xl border-2 border-primary-black-400 focus:border-primary-indigo outline-none transition-colors"
+              onChange={handleOtpChange(index)}
+              onKeyDown={handleKeyDown(index)}
+              ref={(input) => { if (input) otpInputs.current[index] = input; }}
+            />
+          ))}
+        </div>
+        {error && <p className="text-red-400 text-sm font-poppins mb-4">{error}</p>}
         <button
-          className="rounded-full bg-primary-indigo px-10 py-4 mb-10 font-montserrat"
-          onClick={() => {
-            VerifyOtp();
-          }}
+          className="w-full bg-primary-indigo hover:opacity-90 transition-opacity rounded-full py-4 font-montserrat font-bold text-lg disabled:opacity-50"
+          onClick={VerifyOtp}
+          disabled={loading || otp.join("").length < 4}
         >
-          Next {`->`}
+          {loading ? "Verifying..." : "Verify OTP →"}
         </button>
-      </section>
+        <button
+          className="mt-4 text-secondary-white text-sm font-poppins hover:text-white"
+          onClick={() => navigate("/signIn")}
+        >
+          ← Back to sign in
+        </button>
+      </div>
     </div>
   );
 };
