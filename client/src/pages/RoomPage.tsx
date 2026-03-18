@@ -11,7 +11,7 @@ import { socket } from "../sockets/socket";
 import { socketActions } from "../constants/Actions";
 
 interface Props { primaryTheme: Theme; }
-interface RoomData { owner: string; title: string; speakers: string[]; roomType: string; }
+interface RoomData { owner: string; title: string; speakers: string[]; roomType: string; invitedEmails?: string[]; acceptedEmails?: string[]; }
 interface User { name: string; userProfileUrl?: string; _id?: string; isMuted?: boolean; socketId?: string; }
 
 const ICE_SERVERS: RTCIceServer[] = [
@@ -48,9 +48,13 @@ const RoomPage: FC<Props> = () => {
     const [isMuted, setIsMuted] = useState(false);
     const [inviteEmail, setInviteEmail] = useState("");
     const [inviteStatus, setInviteStatus] = useState<string | null>(null);
+    const [inviteListOpen, setInviteListOpen] = useState(false);
+    const [friendPickerOpen, setFriendPickerOpen] = useState(false);
+    const [friends, setFriends] = useState<{ name: string; email: string; userProfileUrl?: string }[]>([]);
+    const [friendSearch, setFriendSearch] = useState("");
 
-    const { userName, email } = useSelector(
-        (state: { user: { userName: string; email: string } }) => state.user
+    const { userName, email, userProfileUrl } = useSelector(
+        (state: { user: { userName: string; email: string; userProfileUrl: string } }) => state.user
     );
 
     // All WebRTC state in refs to avoid stale closures
@@ -58,7 +62,9 @@ const RoomPage: FC<Props> = () => {
     const localStream = useRef<MediaStream | null>(null);
     const audioEls = useRef<Record<string, HTMLAudioElement>>({});
 
-    if (!userName) { navigate("/signIn"); return null; }
+    useEffect(() => {
+        if (!userName) navigate(`/signIn?redirect=/room/${id}`);
+    }, [userName]);
 
     const createPC = (peerId: string): RTCPeerConnection => {
         if (pcs.current[peerId]) return pcs.current[peerId];
@@ -116,15 +122,28 @@ const RoomPage: FC<Props> = () => {
 
     // Fetch room details — auto-join mic if already a speaker (e.g. room owner)
     useEffect(() => {
-        axios.get<{ data: RoomData; userData: User[]; success: boolean }>(
-            `${import.meta.env.VITE_API_URL}/room/getRoomDetails/${id}`
-        ).then(async ({ data: { data, userData: users, success } }) => {
+        const init = async () => {
+            // Ensure user exists in DB before anything else
+            // (invited users land here directly, bypassing MainHome which normally does this)
+            await axios.post(`${import.meta.env.VITE_API_URL}/userActivation/activateUser`, {
+                name: userName, email, userProfileUrl,
+            }).catch(() => {});
+
+            const { data: { data, userData: users, success } } = await axios.get<{ data: RoomData; userData: User[]; success: boolean }>(
+                `${import.meta.env.VITE_API_URL}/room/getRoomDetails/${id}`
+            );
             if (!success) { navigate("/home"); return; }
             setRoomData(data);
             setUserData(users);
+
+            // Pre-load friends list for social room invite picker
+            if (data.roomType === "social") {
+                axios.get(`${import.meta.env.VITE_API_URL}/friends/list/${encodeURIComponent(email)}`)
+                    .then(r => setFriends(r.data.data ?? []))
+                    .catch(() => {});
+            }
             const alreadyIn = data.speakers.includes(userName);
             if (alreadyIn) {
-                // Acquire mic and join signaling without hitting joinRoom API again
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                     localStream.current = stream;
@@ -133,10 +152,11 @@ const RoomPage: FC<Props> = () => {
                     setInRoom(true);
                 } catch (err) {
                     console.error("[auto-join mic]", err);
-                    setInRoom(true); // still mark in room even if mic denied
+                    setInRoom(true);
                 }
             }
-        }).catch(console.error);
+        };
+        init().catch(console.error);
     }, [id]);
 
     // Socket signaling
@@ -299,17 +319,30 @@ const RoomPage: FC<Props> = () => {
 
     const sendInvite = async () => {
         if (!inviteEmail.trim()) return;
+        const target = inviteEmail.trim();
         try {
             const { data } = await axios.post(`${import.meta.env.VITE_API_URL}/room/invite/${id}`, {
-                ownerEmail: email, inviteEmail: inviteEmail.trim()
+                ownerEmail: email, inviteEmail: target
             });
-            setInviteStatus(data.success ? "Invite sent!" : data.msg);
-            if (data.success) setInviteEmail("");
+            if (data.success) {
+                setInviteEmail("");
+                setRoomData(prev => ({
+                    ...prev,
+                    invitedEmails: prev.invitedEmails?.includes(target)
+                        ? prev.invitedEmails
+                        : [...(prev.invitedEmails ?? []), target],
+                }));
+                setInviteStatus(data.emailFailed ? "⚠️ Invited, but email delivery failed." : "✓ Invite sent!");
+            } else {
+                setInviteStatus(data.msg);
+            }
         } catch { setInviteStatus("Failed to send invite."); }
-        setTimeout(() => setInviteStatus(null), 3000);
+        setTimeout(() => setInviteStatus(null), 4000);
     };
 
     const isOwner = roomData.owner === userName;
+
+    if (!userName) return null;
 
     return (
         <div className="pb-28" style={{ background: "var(--ink)" }}>
@@ -359,36 +392,143 @@ const RoomPage: FC<Props> = () => {
                         </div>
                     </div>
 
-                    {/* Invite UI */}
+                    {/* Invite UI — owner only, non-public rooms */}
                     {isOwner && roomData.roomType !== "public" && (
-                        <div className="mt-4 flex gap-2">
-                            <input
-                                type="email"
-                                placeholder="Invite by email..."
-                                value={inviteEmail}
-                                onChange={e => setInviteEmail(e.target.value)}
-                                onKeyDown={e => e.key === "Enter" && sendInvite()}
-                                className="flex-1 px-3 py-2 font-mono text-xs outline-none transition-colors"
-                                style={{
-                                    background: "var(--ink-3)",
-                                    border: "1px solid var(--ink-4)",
-                                    color: "var(--paper)",
-                                }}
-                                onFocus={(e) => (e.target.style.borderColor = "var(--gold)")}
-                                onBlur={(e) => (e.target.style.borderColor = "var(--ink-4)")}
-                            />
-                            <button
-                                onClick={sendInvite}
-                                disabled={!inviteEmail.trim()}
-                                className="font-bebas tracking-widest text-sm px-4 py-2 transition-all hover:opacity-80 disabled:opacity-30"
-                                style={{ background: "var(--gold)", color: "var(--ink)" }}
-                            >
-                                INVITE
-                            </button>
+                        <div className="mt-4">
+                            {/* Social: collapsible friend picker */}
+                            {roomData.roomType === "social" ? (
+                                <div>
+                                    <button
+                                        onClick={() => setFriendPickerOpen(o => !o)}
+                                        className="flex items-center gap-2 font-mono text-xs tracking-widest hover:opacity-70 mb-2"
+                                        style={{ color: "var(--gold)" }}
+                                    >
+                                        <span>{friendPickerOpen ? "▾" : "▸"}</span>
+                                        INVITE A FRIEND
+                                    </button>
+                                    {friendPickerOpen && (
+                                        <div style={{ border: "1px solid var(--ink-4)", background: "var(--ink-3)" }}>
+                                            <input
+                                                type="text"
+                                                placeholder="Search friends..."
+                                                value={friendSearch}
+                                                onChange={e => setFriendSearch(e.target.value)}
+                                                autoFocus
+                                                className="w-full px-3 py-2 font-mono text-xs outline-none"
+                                                style={{ background: "transparent", borderBottom: "1px solid var(--ink-4)", color: "var(--paper)" }}
+                                            />
+                                            <div className="max-h-40 overflow-y-auto">
+                                                {friends
+                                                    .filter(f =>
+                                                        !friendSearch.trim() ||
+                                                        f.name.toLowerCase().includes(friendSearch.toLowerCase())
+                                                    )
+                                                    .map(f => (
+                                                        <button
+                                                            key={f.email}
+                                                            onClick={() => {
+                                                                setInviteEmail(f.email);
+                                                                setFriendPickerOpen(false);
+                                                                setFriendSearch("");
+                                                            }}
+                                                            className="w-full flex items-center gap-3 px-3 py-2 text-left hover:opacity-70 transition-opacity"
+                                                            style={{ borderBottom: "1px solid var(--ink-4)" }}
+                                                        >
+                                                            <img src={f.userProfileUrl || avatarForName(f.name)} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt={f.name} />
+                                                            <span className="font-mono text-xs" style={{ color: "var(--paper)" }}>{f.name}</span>
+                                                        </button>
+                                                    ))
+                                                }
+                                                {friends.filter(f => !friendSearch.trim() || f.name.toLowerCase().includes(friendSearch.toLowerCase())).length === 0 && (
+                                                    <p className="font-mono text-xs px-3 py-2" style={{ color: "var(--ink-5)" }}>No friends found.</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* Show selected friend + send button */}
+                                    {inviteEmail && (
+                                        <div className="flex gap-2 mt-2">
+                                            <div className="flex-1 px-3 py-2 font-mono text-xs" style={{ background: "var(--ink-3)", border: "1px solid var(--gold)", color: "var(--gold)" }}>
+                                                {inviteEmail}
+                                            </div>
+                                            <button
+                                                onClick={sendInvite}
+                                                className="font-bebas tracking-widest text-sm px-4 py-2 transition-all hover:opacity-80"
+                                                style={{ background: "var(--gold)", color: "var(--ink)" }}
+                                            >
+                                                INVITE
+                                            </button>
+                                            <button
+                                                onClick={() => setInviteEmail("")}
+                                                className="font-mono text-xs px-2 hover:opacity-70"
+                                                style={{ color: "var(--ash)" }}
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                /* Private: plain email input */
+                                <div className="flex gap-2">
+                                    <input
+                                        type="email"
+                                        placeholder="Invite by email..."
+                                        value={inviteEmail}
+                                        onChange={e => setInviteEmail(e.target.value)}
+                                        onKeyDown={e => e.key === "Enter" && sendInvite()}
+                                        className="flex-1 px-3 py-2 font-mono text-xs outline-none transition-colors"
+                                        style={{ background: "var(--ink-3)", border: "1px solid var(--ink-4)", color: "var(--paper)" }}
+                                        onFocus={e => (e.target.style.borderColor = "var(--gold)")}
+                                        onBlur={e => (e.target.style.borderColor = "var(--ink-4)")}
+                                    />
+                                    <button
+                                        onClick={sendInvite}
+                                        disabled={!inviteEmail.trim()}
+                                        className="font-bebas tracking-widest text-sm px-4 py-2 transition-all hover:opacity-80 disabled:opacity-30"
+                                        style={{ background: "var(--gold)", color: "var(--ink)" }}
+                                    >
+                                        INVITE
+                                    </button>
+                                </div>
+                            )}
+
+                            {inviteStatus && (
+                                <p className="font-mono text-xs mt-2" style={{ color: inviteStatus.startsWith("⚠️") ? "var(--gold)" : inviteStatus.startsWith("✓") ? "var(--signal)" : "var(--danger)" }}>
+                                    {inviteStatus}
+                                </p>
+                            )}
+
+                            {/* Collapsible invite status list */}
+                            {((roomData.invitedEmails?.length ?? 0) + (roomData.acceptedEmails?.length ?? 0)) > 0 && (
+                                <div className="mt-3">
+                                    <button
+                                        onClick={() => setInviteListOpen(o => !o)}
+                                        className="flex items-center gap-2 font-mono text-xs tracking-widest hover:opacity-70"
+                                        style={{ color: "var(--ash)" }}
+                                    >
+                                        <span>{inviteListOpen ? "▾" : "▸"}</span>
+                                        INVITE STATUS · {(roomData.invitedEmails?.length ?? 0) + (roomData.acceptedEmails?.length ?? 0)}
+                                    </button>
+                                    {inviteListOpen && (
+                                        <div className="mt-2 flex flex-col gap-1">
+                                            {(roomData.acceptedEmails ?? []).map(e => (
+                                                <div key={e} className="flex items-center justify-between px-3 py-1.5 font-mono text-xs" style={{ background: "rgba(61,220,132,0.06)", border: "1px solid rgba(61,220,132,0.2)" }}>
+                                                    <span style={{ color: "var(--paper)" }}>{e}</span>
+                                                    <span style={{ color: "var(--signal)" }}>✓ JOINED</span>
+                                                </div>
+                                            ))}
+                                            {(roomData.invitedEmails ?? []).map(e => (
+                                                <div key={e} className="flex items-center justify-between px-3 py-1.5 font-mono text-xs" style={{ background: "rgba(232,184,75,0.04)", border: "1px solid var(--ink-4)" }}>
+                                                    <span style={{ color: "var(--paper)" }}>{e}</span>
+                                                    <span style={{ color: "var(--ash)" }}>⏳ PENDING</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
-                    )}
-                    {inviteStatus && (
-                        <p className="font-mono text-xs mt-2" style={{ color: "var(--signal)" }}>{inviteStatus}</p>
                     )}
                 </div>
 

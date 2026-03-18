@@ -14,6 +14,7 @@ const MailComponent = ({ setstepPageCount, stepPageCount }: Props) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const redirect = new URLSearchParams(window.location.search).get("redirect") || "";
 
   const handleEmail = async () => {
     if (!email.trim()) { setError("ENTER YOUR EMAIL"); return; }
@@ -22,7 +23,9 @@ const MailComponent = ({ setstepPageCount, stepPageCount }: Props) => {
     try {
       await axios.post(`${import.meta.env.VITE_API_URL}/Otp/send-otp`, { email });
       setstepPageCount(stepPageCount + 1);
-      navigate(`/getUrOtp?email=${email}`);
+      const params = new URLSearchParams({ email });
+      if (redirect) params.set("redirect", redirect);
+      navigate(`/getUrOtp?${params.toString()}`);
     } catch {
       setError("FAILED TO SEND OTP. TRY AGAIN.");
     } finally {

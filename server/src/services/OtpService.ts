@@ -22,10 +22,21 @@ export const sendMail = async (req: Request, res: Response) => {
     const otp = getOtp();
     try {
         await getTransporter().sendMail({
-            from: process.env.SENDER_EMAIL,
+            from: `"Voice Ur Opinion" <${process.env.SENDER_EMAIL}>`,
             to: email,
-            subject: "Use This OTP to sign-in to Voice Your Opinion",
-            text: `Your OTP for Voice Your Opinion is: ${otp}`,
+            subject: "Your OTP for Voice Ur Opinion",
+            html: `
+                <div style="font-family:monospace;max-width:480px;margin:auto;padding:32px;background:#0a0a0a;color:#f0ebe3;">
+                    <h2 style="color:#e8b84b;letter-spacing:4px;font-size:24px;margin:0 0 4px;">VOICE UR OPINION</h2>
+                    <p style="color:#888;font-size:12px;letter-spacing:2px;margin:0 0 32px;">— VERIFY YOUR EMAIL —</p>
+                    <p style="color:#888;font-size:13px;margin:0 0 16px;">Your one-time passcode:</p>
+                    <div style="background:#141414;border:1px solid #2a2a2a;padding:24px;text-align:center;margin-bottom:24px;">
+                        <span style="font-size:40px;letter-spacing:12px;color:#e8b84b;font-weight:bold;">${otp}</span>
+                    </div>
+                    <p style="color:#888;font-size:12px;margin:0 0 8px;">This code expires in <strong style="color:#f0ebe3;">5 minutes</strong>.</p>
+                    <p style="color:#3a3a3a;font-size:11px;margin-top:32px;">If you didn't request this, you can safely ignore this email.</p>
+                </div>
+            `,
         });
         const hashedOtp = createHash(otp);
         const user = await UserloginSchema.findOne({ email });

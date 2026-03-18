@@ -1,6 +1,7 @@
 import { RoomSchema } from "../models/RoomModal"
 import { Request, Response } from "express";
 import { UserSchema } from "../models/UserDataModel";
+import { FriendshipSchema } from "../models/FriendshipModel";
 
 export const joinRoom = async (req: Request, res: Response) => {
     try {
@@ -18,19 +19,41 @@ export const joinRoom = async (req: Request, res: Response) => {
             return res.status(404).json({ success: false, msg: "User doesn't exist" });
         }
         if (!roomData.speakers.includes(userData.name)) {
-            // For non-public rooms, check invite list
             if (roomData.roomType !== "public" && roomData.owner !== userData.name) {
-                if (!roomData.invitedEmails.includes(email)) {
-                    return res.status(403).json({ success: false, msg: "You need an invite to join this room" });
+                // Check invite list
+                const hasInvite = roomData.invitedEmails.includes(email);
+
+                // For social rooms, also allow friends of the owner
+                let isFriend = false;
+                if (roomData.roomType === "social" && roomData.ownerEmail) {
+                    const friendship = await FriendshipSchema.findOne({
+                        $or: [
+                            { from: email, to: roomData.ownerEmail },
+                            { from: roomData.ownerEmail, to: email },
+                        ],
+                        status: "accepted",
+                    });
+                    isFriend = !!friendship;
                 }
-                // Remove from invite list after joining
-                await roomData.updateOne({ $pull: { invitedEmails: email } });
+
+                if (!hasInvite && !isFriend) {
+                    // Also allow if they previously accepted (returning to room)
+                    const wasAccepted = roomData.acceptedEmails?.includes(email);
+                    if (!wasAccepted) {
+                        return res.status(403).json({ success: false, msg: "You need an invite to join this room" });
+                    }
+                }
+                if (hasInvite) {
+                    await roomData.updateOne({
+                        $pull: { invitedEmails: email },
+                        $push: { acceptedEmails: email },
+                    });
+                }
             }
             await roomData.updateOne({ $push: { speakers: userData.name } });
             await roomData.save();
             return res.status(201).json({ success: true, msg: "User joined Room successfully", userData });
-        }
-        else {
+        } else {
             return res.status(301).json({ success: false, msg: "User already exists in the Room" });
         }
     } catch (error) {

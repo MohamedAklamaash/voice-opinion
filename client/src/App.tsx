@@ -9,6 +9,7 @@ import LoginPage from "./screens/LoginPage";
 import MainHome from "./screens/MainScreen/MainHome";
 import { useSelector } from "react-redux";
 import RoomPage from "./pages/RoomPage";
+import FriendsPage from "./pages/FriendsPage";
 export type Theme = "light" | "dark";
 
 const DARK = {
@@ -103,6 +104,10 @@ const App = () => {
           <Route
             path="/room/:id"
             element={<RoomPage primaryTheme={primaryTheme} />}
+          />
+          <Route
+            path="/friends"
+            element={<FriendsPage />}
           />
         </Routes>
         </div>

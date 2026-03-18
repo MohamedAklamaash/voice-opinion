@@ -16,6 +16,7 @@ const GetOtpPage: React.FC<Props> = ({ setstepPageCount, stepPageCount }: Props)
   const urlParams = new URLSearchParams(window.location.search);
   const phoneNumber = urlParams.get("phoneNumber");
   const email = urlParams.get("email");
+  const redirect = urlParams.get("redirect") || "";
   const dispatch = useDispatch();
   useEffect(() => { dispatch(setPhoneNumber(phoneNumber)); }, []);
 
@@ -43,11 +44,11 @@ const GetOtpPage: React.FC<Props> = ({ setstepPageCount, stepPageCount }: Props)
       if (data.existingUser && data.name) {
         dispatch(setUserName(data.name));
         if (data.userProfileUrl) dispatch(setProfileUrl(data.userProfileUrl));
-        navigate("/home");
+        navigate(redirect || "/home");
         return;
       }
       setstepPageCount(stepPageCount + 1);
-      navigate("/enterName");
+      navigate(`/enterName${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ""}`);
     } catch {
       setError("SOMETHING WENT WRONG.");
       setLoading(false);
@@ -99,7 +100,7 @@ const GetOtpPage: React.FC<Props> = ({ setstepPageCount, stepPageCount }: Props)
               inputMode="numeric"
               value={digit}
               maxLength={1}
-              className="flex-1 h-16 font-bebas text-3xl text-center outline-none transition-colors"
+              className="flex-1 w-0 h-16 font-bebas text-3xl text-center outline-none transition-colors"
               style={{
                 background: "var(--ink-2)",
                 border: `1px solid ${digit ? "var(--gold)" : "var(--ink-4)"}`,

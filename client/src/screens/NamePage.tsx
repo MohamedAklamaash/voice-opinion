@@ -15,6 +15,7 @@ const NamePage = ({ stepPageCount, setstepPageCount }: Props) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const email = useSelector((state: { user: { email: string } }) => state.user.email);
+  const redirect = new URLSearchParams(window.location.search).get("redirect") || "";
   const [userName, setuserName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,7 +36,9 @@ const NamePage = ({ stepPageCount, setstepPageCount }: Props) => {
       }
       dispatch(setUserName(userName.trim()));
       setstepPageCount(stepPageCount + 1);
-      navigate(`/loginPage?name=${userName.trim()}`);
+      const params = new URLSearchParams({ name: userName.trim() });
+      if (redirect) params.set("redirect", redirect);
+      navigate(`/loginPage?${params.toString()}`);
     } catch {
       setError("SOMETHING WENT WRONG.");
     } finally {

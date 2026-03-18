@@ -5,6 +5,10 @@ const roomModal = new mongoose.Schema({
         type:String,
         required:true
     },
+    ownerEmail:{
+        type:String,
+        default:"",
+    },
     speakers:{
         type:[String],
         default:[],
@@ -19,6 +23,10 @@ const roomModal = new mongoose.Schema({
         enum:["social","public","private"]
     },
     invitedEmails:{
+        type:[String],
+        default:[],
+    },
+    acceptedEmails:{
         type:[String],
         default:[],
     }

@@ -15,6 +15,7 @@ type Props = {
 const LoginPage = ({ setstepPageCount, stepPageCount }: Props) => {
   const navigate = useNavigate();
   const userName = new URLSearchParams(window.location.search).get("name");
+  const redirect = new URLSearchParams(window.location.search).get("redirect") || "";
   const dispatch = useDispatch();
   const [error, setError] = useState<string | null>(null);
   const [image, setImage] = useState<File | null>(null);
@@ -56,7 +57,7 @@ const LoginPage = ({ setstepPageCount, stepPageCount }: Props) => {
     // use uploaded url, or fall back to the randomly chosen default avatar
     const finalUrl = url || defaultAvatar;
     dispatch(setProfileUrl(finalUrl));
-    navigate(`/home?userName=${userName}&profileUrl=${finalUrl}`);
+    navigate(redirect || `/home?userName=${userName}&profileUrl=${finalUrl}`);
   };
 
   return (

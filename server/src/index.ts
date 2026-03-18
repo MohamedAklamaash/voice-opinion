@@ -11,6 +11,7 @@ import { createServer } from "node:http";
 import { Server, Socket } from "socket.io";
 import roomRoutes from "./routes/Room_Routes";
 import activationRoutes from './routes/ActivationRoutes';
+import friendRoutes from './routes/Friends_Routes';
 import { socketActions } from "./actions/SocketActions";
 import { UserSchema } from "./models/UserDataModel";
 import { RoomSchema } from "./models/RoomModal";
@@ -31,6 +32,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use("/Otp", otpRoutes);
 app.use("/room", roomRoutes);
 app.use("/userActivation", activationRoutes);
+app.use("/friends", friendRoutes);
 
 interface User {
     name?: string;
