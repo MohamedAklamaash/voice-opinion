@@ -16,7 +16,6 @@ export const createARoom = async (req: Request, res: Response) => {
             return res.status(404).json({ success: false, msg: "Email's user not Found" });
         }
 
-        // For social rooms, invited emails come from the friends list selection
         const emailsToInvite: string[] = roomType !== "public" && Array.isArray(inviteEmails) ? inviteEmails : [];
 
         const data = await RoomSchema.create({
@@ -30,7 +29,6 @@ export const createARoom = async (req: Request, res: Response) => {
 
         if (roomType === "public") io.emit("new-room", data);
 
-        // Fire-and-forget invite emails — don't block room creation
         if (emailsToInvite.length > 0) {
             Promise.allSettled(
                 emailsToInvite.map(inviteEmail =>
@@ -114,7 +112,6 @@ export const inviteToRoom = async (req: Request, res: Response) => {
         }
 
         try {
-            // Fire-and-forget — respond immediately, email sends in background
             sendRoomInviteEmail(inviteEmail, room.title, id, owner.name)
                 .then(() => console.log(`[invite] email sent to ${inviteEmail}`))
                 .catch(err => console.error(`[invite] email failed for ${inviteEmail}:`, err.message));
@@ -155,7 +152,6 @@ export const getSocialRooms = async (req: Request, res: Response) => {
     }
 };
 
-// GET /room/myRooms/:email — rooms the user was invited to (pending or accepted)
 export const getMyInvitedRooms = async (req: Request, res: Response) => {
     try {
         const { email } = req.params;
@@ -168,7 +164,6 @@ export const getMyInvitedRooms = async (req: Request, res: Response) => {
     }
 };
 
-// DELETE /room/leaveInvite/:id  — user removes themselves from invite lists
 export const leaveInvite = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;

@@ -5,7 +5,6 @@ export const checkNameAvailable = async (req: Request, res: Response) => {
     const { name, email } = req.body;
     if (!name) return res.status(400).json({ success: false, msg: "Name required" });
     const existing = await UserSchema.findOne({ name });
-    // Available if no one has it, or the same email already owns it
     const available = !existing || existing.email === email;
     return res.status(200).json({ available });
 };
@@ -17,7 +16,6 @@ export const activateUser = async (req: Request, res: Response) => {
     }
 
     try {
-        // Reject if name is taken by a different user
         const nameTaken = await UserSchema.findOne({ name, email: { $ne: email } });
         if (nameTaken) {
             return res.status(409).json({ success: false, msg: "Username already taken" });

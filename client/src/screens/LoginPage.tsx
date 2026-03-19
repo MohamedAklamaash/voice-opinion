@@ -19,7 +19,6 @@ const LoginPage = ({ setstepPageCount, stepPageCount }: Props) => {
   const dispatch = useDispatch();
   const [error, setError] = useState<string | null>(null);
   const [image, setImage] = useState<File | null>(null);
-  // pick a random default avatar once on mount
   const [defaultAvatar] = useState(() => randomAvatar());
   const [preview, setPreview] = useState("");
   const [url, setUrl] = useState("");
@@ -54,10 +53,9 @@ const LoginPage = ({ setstepPageCount, stepPageCount }: Props) => {
 
   const handleContinue = () => {
     setstepPageCount(stepPageCount + 1);
-    // use uploaded url, or fall back to the randomly chosen default avatar
     const finalUrl = url || defaultAvatar;
     dispatch(setProfileUrl(finalUrl));
-    navigate(redirect || `/home?userName=${userName}&profileUrl=${finalUrl}`);
+    navigate(redirect || "/home");
   };
 
   return (

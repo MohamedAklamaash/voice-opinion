@@ -10,5 +10,7 @@ export const socketActions = {
     ICE_CANDIDATE: 'ice-candidate',
     MUTE: 'mute',
     UNMUTE: 'unmute',
-    MUTE_INFO: 'mute-info'
+    MUTE_INFO: 'mute-info',
+    CHAT_MESSAGE: 'chat-message',
+    ROOM_UPDATED: 'room-updated',
 }

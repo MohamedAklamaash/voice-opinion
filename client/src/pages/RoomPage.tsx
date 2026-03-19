@@ -9,6 +9,7 @@ import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
 import { avatarForName } from "../utils/avatars";
 import { socket } from "../sockets/socket";
 import { socketActions } from "../constants/Actions";
+import ChatPanel from "../components/ChatPanel";
 
 interface Props { primaryTheme: Theme; }
 interface RoomData { owner: string; title: string; speakers: string[]; roomType: string; invitedEmails?: string[]; acceptedEmails?: string[]; }
@@ -57,10 +58,10 @@ const RoomPage: FC<Props> = () => {
         (state: { user: { userName: string; email: string; userProfileUrl: string } }) => state.user
     );
 
-    // All WebRTC state in refs to avoid stale closures
     const pcs = useRef<Record<string, RTCPeerConnection>>({});
     const localStream = useRef<MediaStream | null>(null);
     const audioEls = useRef<Record<string, HTMLAudioElement>>({});
+    const isMutedRef = useRef(false);
 
     useEffect(() => {
         if (!userName) navigate(`/signIn?redirect=/room/${id}`);
@@ -85,7 +86,6 @@ const RoomPage: FC<Props> = () => {
             console.log("[ontrack] from", peerId, "streams:", e.streams.length);
             const stream = e.streams[0] ?? new MediaStream([e.track]);
 
-            // Get or create audio element
             let el = audioEls.current[peerId];
             if (!el) {
                 el = document.createElement("audio");
@@ -120,11 +120,8 @@ const RoomPage: FC<Props> = () => {
         if (el) { el.srcObject = null; el.remove(); delete audioEls.current[peerId]; }
     };
 
-    // Fetch room details — auto-join mic if already a speaker (e.g. room owner)
     useEffect(() => {
         const init = async () => {
-            // Ensure user exists in DB before anything else
-            // (invited users land here directly, bypassing MainHome which normally does this)
             await axios.post(`${import.meta.env.VITE_API_URL}/userActivation/activateUser`, {
                 name: userName, email, userProfileUrl,
             }).catch(() => {});
@@ -134,9 +131,6 @@ const RoomPage: FC<Props> = () => {
             );
             if (!success) { navigate("/home"); return; }
             setRoomData(data);
-            setUserData(users);
-
-            // Pre-load friends list for social room invite picker
             if (data.roomType === "social") {
                 axios.get(`${import.meta.env.VITE_API_URL}/friends/list/${encodeURIComponent(email)}`)
                     .then(r => setFriends(r.data.data ?? []))
@@ -148,7 +142,7 @@ const RoomPage: FC<Props> = () => {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                     localStream.current = stream;
                     const me = users.find(u => u.name === userName);
-                    socket.emit(socketActions.JOIN, { roomId: id, user: me ?? { name: userName } });
+                    socket.emit(socketActions.JOIN, { roomId: id, user: me ?? { name: userName, email, userProfileUrl } });
                     setInRoom(true);
                 } catch (err) {
                     console.error("[auto-join mic]", err);
@@ -159,10 +153,8 @@ const RoomPage: FC<Props> = () => {
         init().catch(console.error);
     }, [id]);
 
-    // Socket signaling
     useEffect(() => {
-        // New joiner: existing peers tell us about themselves — WE create offers
-        const onExistingPeers = async ({ peers }: { peers: { peerId: string; peerUser: User }[] }) => {
+            const onExistingPeers = async ({ peers }: { peers: { peerId: string; peerUser: User }[] }) => {
             console.log("[existing-peers]", peers.length, "peers");
             for (const { peerId, peerUser } of peers) {
                 if (!peerUser?.name) continue;
@@ -197,7 +189,6 @@ const RoomPage: FC<Props> = () => {
             const pc = pcs.current[peerId];
 
             if (sessionDescription.type === "answer") {
-                // Only process answer if we have a PC that sent an offer
                 if (!pc || pc.signalingState !== "have-local-offer") {
                     console.warn("[sdp] ignoring answer — no pending offer for", peerId);
                     return;
@@ -206,7 +197,6 @@ const RoomPage: FC<Props> = () => {
                 return;
             }
 
-            // It's an offer — create PC if needed, add tracks, send answer
             const targetPc = pc ?? createPC(peerId);
             if (!pc) addTracks(targetPc);
             addTracks(targetPc);
@@ -222,13 +212,13 @@ const RoomPage: FC<Props> = () => {
                 .catch(e => console.error("[addIceCandidate]", e));
         };
 
+        const preserveMyMute = (users: User[]) =>
+            users.filter(u => u.name).map(u =>
+                u.name === userName ? { ...u, isMuted: isMutedRef.current } : u
+            );
+
         const onJoin = ({ users }: { users: User[] }) => {
-            setUserData(prev => {
-                const socketIdMap = Object.fromEntries(prev.filter(u => u.name && u.socketId).map(u => [u.name, u.socketId]));
-                const merged = users.filter(u => u.name).map(u => ({ ...u, socketId: socketIdMap[u.name!] ?? u.socketId }));
-                // dedupe by name, keep last
-                return Array.from(new Map(merged.map(u => [u.name, u])).values());
-            });
+            setUserData(Array.from(new Map(preserveMyMute(users).map(u => [u.name, u])).values()));
         };
 
         const onLeave = ({ users }: { users: User[] }) => {
@@ -237,9 +227,12 @@ const RoomPage: FC<Props> = () => {
             setUserData(users);
         };
 
-        const onMuteInfo = ({ users }: { users: User[] }) => setUserData(users);
+        const onMuteInfo = ({ users }: { users: User[] }) => setUserData(preserveMyMute(users));
         const onRemovePeer = ({ users }: { users: User[] }) => setUserData(users);
         const onKicked = () => { void doLeave(); navigate("/home"); };
+        const onRoomUpdated = ({ invitedEmails, acceptedEmails }: { invitedEmails: string[]; acceptedEmails: string[] }) => {
+            setRoomData(prev => ({ ...prev, invitedEmails, acceptedEmails }));
+        };
 
         socket.on("existing-peers", onExistingPeers);
         socket.on("new-peer", onNewPeer);
@@ -249,6 +242,7 @@ const RoomPage: FC<Props> = () => {
         socket.on(socketActions.LEAVE, onLeave);
         socket.on(socketActions.MUTE_INFO, onMuteInfo);
         socket.on(socketActions.REMOVE_PEER, onRemovePeer);
+        socket.on(socketActions.ROOM_UPDATED, onRoomUpdated);
         socket.on("kicked", onKicked);
 
         return () => {
@@ -260,6 +254,7 @@ const RoomPage: FC<Props> = () => {
             socket.off(socketActions.LEAVE, onLeave);
             socket.off(socketActions.MUTE_INFO, onMuteInfo);
             socket.off(socketActions.REMOVE_PEER, onRemovePeer);
+            socket.off(socketActions.ROOM_UPDATED, onRoomUpdated);
             socket.off("kicked", onKicked);
         };
     }, []); // empty deps — handlers use refs, no stale closure issues
@@ -273,7 +268,6 @@ const RoomPage: FC<Props> = () => {
             const { data: { userData: u } } = await axios.put(
                 `${import.meta.env.VITE_API_URL}/room/joinRoom/${id}`, { email }
             );
-            // Emit JOIN — server will send existing-peers back, then we create offers
             socket.emit(socketActions.JOIN, { roomId: id, user: u });
             setInRoom(true);
         } catch (err) {
@@ -301,7 +295,7 @@ const RoomPage: FC<Props> = () => {
         const next = !isMuted;
         localStream.current.getAudioTracks().forEach(t => { t.enabled = !next; });
         setIsMuted(next);
-        // Update local userData immediately so UI reflects change without waiting for server
+        isMutedRef.current = next;
         setUserData(prev => prev.map(u => u.name === userName ? { ...u, isMuted: next } : u));
         const self = userData.find(u => u.name === userName);
         if (self?._id) socket.emit(socketActions.MUTE, { roomId: id, userId: String(self._id) });
@@ -589,6 +583,18 @@ const RoomPage: FC<Props> = () => {
                             </div>
                         );
                     })}
+                </div>
+
+                {/* Chat */}
+                <div className="mt-8">
+                    <ChatPanel
+                        roomId={id!}
+                        roomType={roomData.roomType}
+                        currentUserName={userName}
+                        currentUserId={userData.find(u => u.name === userName)?._id ?? userName}
+                        currentUserAvatar={userProfileUrl}
+                        inRoom={inRoom}
+                    />
                 </div>
             </div>
 

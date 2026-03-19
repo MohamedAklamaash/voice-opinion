@@ -1,5 +1,5 @@
 import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 
 interface Props {
   setstepPageCount: (num: number) => void;
@@ -12,10 +12,7 @@ const Home = ({ stepPageCount, setstepPageCount }: Props) => {
     (state: { user: { userName: string; userProfileUrl: string } }) => state.user
   );
 
-  if (userName) {
-    window.location.href = `/home?userName=${userName}&profileUrl=${userProfileUrl}`;
-    return null;
-  }
+  if (userName) return <Navigate to="/home" replace />;
 
   return (
     <div className="flex-1 flex flex-col" style={{ background: "var(--ink)" }}>

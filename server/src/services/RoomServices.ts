@@ -20,10 +20,8 @@ export const joinRoom = async (req: Request, res: Response) => {
         }
         if (!roomData.speakers.includes(userData.name)) {
             if (roomData.roomType !== "public" && roomData.owner !== userData.name) {
-                // Check invite list
                 const hasInvite = roomData.invitedEmails.includes(email);
 
-                // For social rooms, also allow friends of the owner
                 let isFriend = false;
                 if (roomData.roomType === "social" && roomData.ownerEmail) {
                     const friendship = await FriendshipSchema.findOne({
@@ -37,7 +35,6 @@ export const joinRoom = async (req: Request, res: Response) => {
                 }
 
                 if (!hasInvite && !isFriend) {
-                    // Also allow if they previously accepted (returning to room)
                     const wasAccepted = roomData.acceptedEmails?.includes(email);
                     if (!wasAccepted) {
                         return res.status(403).json({ success: false, msg: "You need an invite to join this room" });

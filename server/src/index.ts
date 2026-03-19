@@ -46,13 +46,14 @@ interface User {
     owner?: string;
 }
 
-// roomId -> User[]
 const socketUserMap: Record<string, User[]> = {};
+
+interface ChatMessage { senderId: string; senderName: string; senderAvatar?: string; text: string; timestamp: string; }
+const roomChats: Record<string, ChatMessage[]> = {};
 
 io.on("connection", (socket: Socket) => {
     console.log("User connected", socket.id);
 
-    // When a user joins a room, notify all existing peers to initiate connections
     socket.on(socketActions.JOIN, async (data) => {
         try {
             const { roomId, user }: { roomId: string; user: User } = data;
@@ -61,12 +62,10 @@ io.on("connection", (socket: Socket) => {
             user.isMuted = false;
             user.socketId = socket.id;
 
-            // Tell the new joiner about all existing peers — new joiner will create offers
             socket.emit("existing-peers", {
                 peers: socketUserMap[roomId].map(u => ({ peerId: u.socketId, peerUser: u }))
             });
 
-            // Tell all existing peers about the new joiner — they will wait for offers (createOffer: false)
             socketUserMap[roomId].forEach(existingUser => {
                 if (existingUser.socketId) {
                     io.to(existingUser.socketId).emit("new-peer", {
@@ -80,7 +79,19 @@ io.on("connection", (socket: Socket) => {
             socketUserMap[roomId].push(user);
             socket.join(roomId);
 
+            if (roomChats[roomId]?.length) {
+                socket.emit("chat-history", { messages: roomChats[roomId] });
+            }
+
             io.to(roomId).emit(socketActions.JOIN, { user, users: socketUserMap[roomId] });
+
+            const updatedRoom = await RoomSchema.findById(roomId).lean();
+            if (updatedRoom) {
+                io.to(roomId).emit(socketActions.ROOM_UPDATED, {
+                    invitedEmails: updatedRoom.invitedEmails,
+                    acceptedEmails: updatedRoom.acceptedEmails,
+                });
+            }
         } catch (error) {
             console.error('Error in JOIN:', error);
         }
@@ -95,14 +106,25 @@ io.on("connection", (socket: Socket) => {
         } catch (error) { console.log(error); }
     });
 
-    // Route ICE candidate to specific peer by socket ID
     socket.on(socketActions.RELAY_ICE, ({ iceCandidate, peerId }: { iceCandidate: RTCIceCandidateInit; peerId: string }) => {
         io.to(peerId).emit(socketActions.ICE_CANDIDATE, { peerId: socket.id, iceCandidate });
     });
 
-    // Route SDP to specific peer by socket ID
     socket.on(socketActions.RELAY_SDP, ({ sessionDescription, peerId }: { sessionDescription: RTCSessionDescriptionInit; peerId: string }) => {
         io.to(peerId).emit(socketActions.SESSION_DESCRIPTION, { peerId: socket.id, sessionDescription });
+    });
+
+    socket.on(socketActions.CHAT_MESSAGE, ({ roomId, message }: { roomId: string; message: ChatMessage }) => {
+        if (!roomChats[roomId]) roomChats[roomId] = [];
+        roomChats[roomId].push(message);
+        if (roomChats[roomId].length > 200) roomChats[roomId].shift();
+        io.to(roomId).emit(socketActions.CHAT_MESSAGE, { message });
+    });
+
+    socket.on("get-chat-history", async ({ roomId }: { roomId: string }) => {
+        const room = await RoomSchema.findById(roomId).lean();
+        if (!room || room.roomType !== "public") return;
+        socket.emit("chat-history", { messages: roomChats[roomId] ?? [] });
     });
 
     socket.on(socketActions.MUTE, ({ roomId, userId }: { roomId: string; userId: string }) => {
@@ -119,7 +141,6 @@ io.on("connection", (socket: Socket) => {
         if (room?.owner === userName && socketUserMap[roomId]) {
             const target = socketUserMap[roomId]?.find(u => u._id === peerId);
             if (target?.socketId) {
-                // Tell the removed user to leave
                 io.to(target.socketId).emit("kicked");
             }
             socketUserMap[roomId] = socketUserMap[roomId].filter(u => u._id !== peerId);
@@ -128,7 +149,6 @@ io.on("connection", (socket: Socket) => {
     });
 
     socket.on("disconnect", () => {
-        // Clean up from all rooms
         for (const roomId in socketUserMap) {
             const before = socketUserMap[roomId].length;
             socketUserMap[roomId] = socketUserMap[roomId].filter(u => u.socketId !== socket.id);

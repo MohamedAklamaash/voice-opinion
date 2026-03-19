@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 
 const friendshipSchema = new mongoose.Schema({
-    from: { type: String, required: true },   // email of requester
-    to: { type: String, required: true },     // email of recipient
+    from: { type: String, required: true },
+    to: { type: String, required: true },
     status: {
         type: String,
         enum: ["pending", "accepted", "rejected"],

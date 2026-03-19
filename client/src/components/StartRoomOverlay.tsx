@@ -29,8 +29,8 @@ const StartRoomOverlay = ({ setshowModal, showModal }: Props) => {
   const [title, settitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [selectedFriends, setSelectedFriends] = useState<string[]>([]); // emails
-  const [inviteEmail, setInviteEmail] = useState(""); // for private rooms
+  const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
   const navigate = useNavigate();
   const { email } = useSelector((state: { user: { email: string } }) => state.user);
 
@@ -52,7 +52,6 @@ const StartRoomOverlay = ({ setshowModal, showModal }: Props) => {
     if (!title.trim()) return;
     setLoading(true);
     try {
-      // Build invite list: for social = selected friends, for private = typed email
       const inviteEmails =
         selectRoom === "social" ? selectedFriends :
         selectRoom === "private" && inviteEmail.trim() ? [inviteEmail.trim()] :

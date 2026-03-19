@@ -68,7 +68,7 @@ const FriendsPage = () => {
         pending.some(p => p.email === u.email);
 
     return (
-        <div className="max-w-2xl mx-auto px-5 py-8" style={{ background: "var(--ink)" }}>
+        <div className="max-w-4xl mx-auto px-5 py-8" style={{ background: "var(--ink)" }}>
             <p className="font-mono text-xs tracking-widest mb-2" style={{ color: "var(--ash)" }}>— SOCIAL —</p>
             <h1 className="font-bebas text-5xl mb-6" style={{ color: "var(--paper)" }}>FRIENDS</h1>
 
@@ -118,22 +118,22 @@ const FriendsPage = () => {
                     <p className="font-mono text-xs tracking-widest mb-3" style={{ color: "var(--ash)" }}>
                         INCOMING REQUESTS · {pending.length}
                     </p>
-                    {pending.map(u => (
-                        <div key={u.email} className="flex items-center justify-between px-4 py-3 mb-2" style={{ border: "1px solid var(--ink-4)", background: "var(--ink-2)" }}>
-                            <div className="flex items-center gap-3">
-                                <img src={u.userProfileUrl || avatarForName(u.name)} className="w-8 h-8 rounded-full object-cover" alt={u.name} />
-                                <span className="font-mono text-sm" style={{ color: "var(--paper)" }}>{u.name}</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {pending.map(u => (
+                            <div key={u.email} className="flex flex-col items-center gap-2 px-3 py-4" style={{ border: "1px solid var(--ink-4)", background: "var(--ink-2)" }}>
+                                <img src={u.userProfileUrl || avatarForName(u.name)} className="w-12 h-12 rounded-full object-cover" alt={u.name} />
+                                <span className="font-mono text-xs text-center truncate w-full" style={{ color: "var(--paper)" }}>{u.name}</span>
+                                <div className="flex gap-1.5 w-full">
+                                    <button onClick={() => respond(u.email, "accepted")} className="flex-1 flex items-center justify-center gap-1 font-mono text-xs py-1 hover:opacity-80" style={{ background: "var(--signal)", color: "var(--ink)" }}>
+                                        <CheckIcon sx={{ fontSize: 12 }} /> YES
+                                    </button>
+                                    <button onClick={() => respond(u.email, "rejected")} className="flex-1 flex items-center justify-center gap-1 font-mono text-xs py-1 hover:opacity-80" style={{ background: "var(--ink-4)", color: "var(--paper)" }}>
+                                        <CloseIcon sx={{ fontSize: 12 }} /> NO
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => respond(u.email, "accepted")} className="flex items-center gap-1 font-mono text-xs px-3 py-1 hover:opacity-80" style={{ background: "var(--signal)", color: "var(--ink)" }}>
-                                    <CheckIcon sx={{ fontSize: 14 }} /> ACCEPT
-                                </button>
-                                <button onClick={() => respond(u.email, "rejected")} className="flex items-center gap-1 font-mono text-xs px-3 py-1 hover:opacity-80" style={{ background: "var(--ink-4)", color: "var(--paper)" }}>
-                                    <CloseIcon sx={{ fontSize: 14 }} /> DECLINE
-                                </button>
-                            </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -145,12 +145,14 @@ const FriendsPage = () => {
                 {friends.length === 0 ? (
                     <p className="font-mono text-xs" style={{ color: "var(--ink-5)" }}>No friends yet. Search for people above.</p>
                 ) : (
-                    friends.map(u => (
-                        <div key={u.email} className="flex items-center gap-3 px-4 py-3 mb-2" style={{ border: "1px solid var(--ink-4)", background: "var(--ink-2)" }}>
-                            <img src={u.userProfileUrl || avatarForName(u.name)} className="w-8 h-8 rounded-full object-cover" alt={u.name} />
-                            <span className="font-mono text-sm" style={{ color: "var(--paper)" }}>{u.name}</span>
-                        </div>
-                    ))
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {friends.map(u => (
+                            <div key={u.email} className="flex flex-col items-center gap-2 px-3 py-4" style={{ border: "1px solid var(--ink-4)", background: "var(--ink-2)" }}>
+                                <img src={u.userProfileUrl || avatarForName(u.name)} className="w-12 h-12 rounded-full object-cover" alt={u.name} />
+                                <span className="font-mono text-xs text-center truncate w-full" style={{ color: "var(--paper)" }}>{u.name}</span>
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
 
@@ -160,13 +162,15 @@ const FriendsPage = () => {
                     <p className="font-mono text-xs tracking-widest mb-3" style={{ color: "var(--ash)" }}>
                         SENT REQUESTS · {sent.length}
                     </p>
-                    {sent.map(u => (
-                        <div key={u.email} className="flex items-center gap-3 px-4 py-3 mb-2" style={{ border: "1px solid var(--ink-4)", background: "var(--ink-2)" }}>
-                            <img src={u.userProfileUrl || avatarForName(u.name)} className="w-8 h-8 rounded-full object-cover" alt={u.name} />
-                            <span className="font-mono text-sm" style={{ color: "var(--paper)" }}>{u.name}</span>
-                            <span className="font-mono text-xs ml-auto" style={{ color: "var(--ash)" }}>PENDING</span>
-                        </div>
-                    ))}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {sent.map(u => (
+                            <div key={u.email} className="flex flex-col items-center gap-2 px-3 py-4" style={{ border: "1px solid var(--ink-4)", background: "var(--ink-2)" }}>
+                                <img src={u.userProfileUrl || avatarForName(u.name)} className="w-12 h-12 rounded-full object-cover" alt={u.name} />
+                                <span className="font-mono text-xs text-center truncate w-full" style={{ color: "var(--paper)" }}>{u.name}</span>
+                                <span className="font-mono text-[10px]" style={{ color: "var(--ash)" }}>PENDING</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
         </div>

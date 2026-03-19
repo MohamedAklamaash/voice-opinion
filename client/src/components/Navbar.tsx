@@ -32,7 +32,6 @@ const Navbar = ({ name, imgSrc, setprimaryTheme, primaryTheme }: Props) => {
       .catch(() => {});
   }, [email]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (dropRef.current && !dropRef.current.contains(e.target as Node)) setDropOpen(false);

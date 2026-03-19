@@ -67,7 +67,6 @@ export const verifyOtp = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, msg: "OTP is not Valid" });
     }
 
-    // Check if user already has an account
     const existingUser = await UserSchema.findOne({ email, activated: true });
     if (existingUser) {
         return res.status(200).json({
