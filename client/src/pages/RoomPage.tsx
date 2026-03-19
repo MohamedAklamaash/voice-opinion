@@ -6,6 +6,9 @@ import { useSelector } from "react-redux";
 import MicOutlinedIcon from "@mui/icons-material/MicOutlined";
 import MicOffIcon from "@mui/icons-material/MicOff";
 import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
+import VideocamIcon from "@mui/icons-material/Videocam";
+import VideocamOffIcon from "@mui/icons-material/VideocamOff";
+import PushPinIcon from "@mui/icons-material/PushPin";
 import { avatarForName } from "../utils/avatars";
 import { socket } from "../sockets/socket";
 import { socketActions } from "../constants/Actions";
@@ -53,6 +56,7 @@ const RoomPage: FC<Props> = () => {
     const [friendPickerOpen, setFriendPickerOpen] = useState(false);
     const [friends, setFriends] = useState<{ name: string; email: string; userProfileUrl?: string }[]>([]);
     const [friendSearch, setFriendSearch] = useState("");
+    const [pinnedUser, setPinnedUser] = useState<string | null>(null);
 
     const { userName, email, userProfileUrl } = useSelector(
         (state: { user: { userName: string; email: string; userProfileUrl: string } }) => state.user
@@ -61,7 +65,10 @@ const RoomPage: FC<Props> = () => {
     const pcs = useRef<Record<string, RTCPeerConnection>>({});
     const localStream = useRef<MediaStream | null>(null);
     const audioEls = useRef<Record<string, HTMLAudioElement>>({});
+    const videoEls = useRef<Record<string, HTMLVideoElement>>({});
+    const localVideoRef = useRef<HTMLVideoElement>(null);
     const isMutedRef = useRef(false);
+    const [isVideoOn, setIsVideoOn] = useState(false);
 
     useEffect(() => {
         if (!userName) navigate(`/signIn?redirect=/room/${id}`);
@@ -83,19 +90,32 @@ const RoomPage: FC<Props> = () => {
             console.log(`[ICE state ${peerId}]`, pc.iceConnectionState);
 
         pc.ontrack = (e) => {
-            console.log("[ontrack] from", peerId, "streams:", e.streams.length);
+            console.log("[ontrack] from", peerId, "track kind:", e.track.kind);
             const stream = e.streams[0] ?? new MediaStream([e.track]);
 
-            let el = audioEls.current[peerId];
-            if (!el) {
-                el = document.createElement("audio");
-                el.autoplay = true;
-                (el as any).playsInline = true;
-                document.body.appendChild(el);
-                audioEls.current[peerId] = el;
+            if (e.track.kind === "audio") {
+                let el = audioEls.current[peerId];
+                if (!el) {
+                    el = document.createElement("audio");
+                    el.autoplay = true;
+                    (el as any).playsInline = true;
+                    document.body.appendChild(el);
+                    audioEls.current[peerId] = el;
+                }
+                el.srcObject = stream;
+                el.play().catch(err => console.error("[audio play]", err));
+            } else if (e.track.kind === "video") {
+                let el = videoEls.current[peerId];
+                if (!el) {
+                    el = document.createElement("video");
+                    el.autoplay = true;
+                    el.playsInline = true;
+                    el.muted = true;
+                    videoEls.current[peerId] = el;
+                }
+                el.srcObject = stream;
+                setUserData(prev => [...prev]);
             }
-            el.srcObject = stream;
-            el.play().catch(err => console.error("[audio play]", err));
         };
 
         pcs.current[peerId] = pc;
@@ -116,8 +136,10 @@ const RoomPage: FC<Props> = () => {
     const closePC = (peerId: string) => {
         pcs.current[peerId]?.close();
         delete pcs.current[peerId];
-        const el = audioEls.current[peerId];
-        if (el) { el.srcObject = null; el.remove(); delete audioEls.current[peerId]; }
+        const audio = audioEls.current[peerId];
+        if (audio) { audio.srcObject = null; audio.remove(); delete audioEls.current[peerId]; }
+        const video = videoEls.current[peerId];
+        if (video) { video.srcObject = null; delete videoEls.current[peerId]; }
     };
 
     useEffect(() => {
@@ -278,6 +300,8 @@ const RoomPage: FC<Props> = () => {
     const doLeave = async () => {
         localStream.current?.getTracks().forEach(t => t.stop());
         localStream.current = null;
+        if (localVideoRef.current) localVideoRef.current.srcObject = null;
+        setIsVideoOn(false);
         Object.keys(pcs.current).forEach(closePC);
         try {
             const { data: { userData: u } } = await axios.put(
@@ -299,6 +323,34 @@ const RoomPage: FC<Props> = () => {
         setUserData(prev => prev.map(u => u.name === userName ? { ...u, isMuted: next } : u));
         const self = userData.find(u => u.name === userName);
         if (self?._id) socket.emit(socketActions.MUTE, { roomId: id, userId: String(self._id) });
+    };
+
+    const toggleVideo = async () => {
+        if (!inRoom) return;
+        if (isVideoOn) {
+            localStream.current?.getVideoTracks().forEach(t => { t.stop(); localStream.current!.removeTrack(t); });
+            Object.values(pcs.current).forEach(pc => {
+                pc.getSenders().filter(s => s.track?.kind === "video").forEach(s => pc.removeTrack(s));
+            });
+            if (localVideoRef.current) localVideoRef.current.srcObject = null;
+            setIsVideoOn(false);
+        } else {
+            try {
+                const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const videoTrack = videoStream.getVideoTracks()[0];
+                localStream.current?.addTrack(videoTrack);
+                if (localVideoRef.current) {
+                    localVideoRef.current.srcObject = new MediaStream([videoTrack]);
+                }
+                // Add video track to all existing PCs
+                Object.values(pcs.current).forEach(pc => {
+                    pc.addTrack(videoTrack, localStream.current!);
+                });
+                setIsVideoOn(true);
+            } catch (err) {
+                console.error("[toggleVideo]", err);
+            }
+        }
     };
 
     const deleteRoom = async () => {
@@ -532,58 +584,85 @@ const RoomPage: FC<Props> = () => {
                 </p>
 
                 {/* Speakers grid */}
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-6">
-                    {Array.from(new Map(userData.filter(u => u.name).map(u => [u.socketId ?? u._id ?? u.name, u])).values()).map((user) => {
+                {(() => {
+                    const users = Array.from(new Map(userData.filter(u => u.name).map(u => [u.socketId ?? u._id ?? u.name, u])).values());
+                    const pinned = pinnedUser ? users.find(u => (u.socketId ?? u._id ?? u.name) === pinnedUser) : null;
+                    const rest = pinned ? users.filter(u => (u.socketId ?? u._id ?? u.name) !== pinnedUser) : users;
+
+                    const renderTile = (user: User, large = false) => {
                         const isMe = user.name === userName;
                         const speaking = inRoom && !user.isMuted;
+                        const hasVideo = isMe ? isVideoOn : !!videoEls.current[user.socketId ?? ""];
+                        const key = user.socketId ?? user._id ?? user.name;
+                        const isPinned = pinnedUser === key;
                         return (
-                            <div key={user.socketId ?? user._id ?? user.name} className="flex flex-col items-center gap-2">
-                                <div className="relative">
-                                    {/* Speaking ring */}
-                                    {speaking && (
-                                        <span
-                                            className="absolute inset-0 rounded-full"
-                                            style={{
-                                                border: "2px solid var(--signal)",
-                                                animation: "pulse-ring 1.2s ease-out infinite",
-                                            }}
-                                        />
-                                    )}
-                                    <img
-                                        src={user.userProfileUrl || avatarForName(user.name)}
-                                        alt={user.name}
-                                        className="w-14 h-14 rounded-full object-cover"
-                                        style={{
-                                            border: `2px solid ${speaking ? "var(--signal)" : "var(--ink-4)"}`,
-                                        }}
+                            <div
+                                key={key}
+                                className="relative overflow-hidden"
+                                style={{
+                                    aspectRatio: "1 / 1",
+                                    background: "var(--ink-3)",
+                                    border: `2px solid ${speaking ? "var(--signal)" : "var(--ink-4)"}`,
+                                    boxShadow: speaking ? "0 0 0 2px var(--signal)" : "none",
+                                    transition: "border-color 0.2s, box-shadow 0.2s",
+                                }}
+                            >
+                                {hasVideo ? (
+                                    <video
+                                        ref={isMe ? localVideoRef : (el) => { if (el && user.socketId && videoEls.current[user.socketId]) el.srcObject = videoEls.current[user.socketId].srcObject; }}
+                                        autoPlay playsInline muted={isMe}
+                                        className="absolute inset-0 w-full h-full object-cover"
                                     />
-                                    {user.isMuted && (
-                                        <span
-                                            className="absolute -bottom-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full"
-                                            style={{ background: "var(--danger)" }}
-                                        >
-                                            <MicOffIcon sx={{ fontSize: 11 }} />
-                                        </span>
-                                    )}
-                                </div>
-                                <p className="font-mono text-xs text-center truncate w-full" style={{ color: "var(--paper)" }}>
-                                    {isMe ? "YOU" : user.name.slice(0, 8) + (user.name.length > 8 ? "…" : "")}
-                                </p>
-                                <VoiceBars active={speaking} />
-                                {isOwner && !isMe && (
-                                    <button
-                                        onClick={() => removeUser(user)}
-                                        className="transition-opacity hover:opacity-70"
-                                        style={{ color: "var(--danger)" }}
-                                        title="Remove"
-                                    >
-                                        <PersonRemoveIcon sx={{ fontSize: 14 }} />
-                                    </button>
+                                ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <img
+                                            src={user.userProfileUrl || avatarForName(user.name)}
+                                            alt={user.name}
+                                            className={`${large ? "w-28 h-28" : "w-16 h-16"} rounded-full object-cover`}
+                                            style={{ border: `2px solid ${speaking ? "var(--signal)" : "var(--ink-4)"}` }}
+                                        />
+                                    </div>
                                 )}
+                                {/* Bottom bar */}
+                                <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-2 py-1.5" style={{ background: "rgba(0,0,0,0.55)" }}>
+                                    <span className="font-mono text-xs truncate" style={{ color: "var(--paper)" }}>
+                                        {isMe ? "YOU" : user.name.slice(0, 12) + (user.name.length > 12 ? "…" : "")}
+                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                        {speaking && <VoiceBars active />}
+                                        {user.isMuted && <MicOffIcon sx={{ fontSize: 13, color: "#e84040" }} />}
+                                        <button
+                                            onClick={() => setPinnedUser(isPinned ? null : key)}
+                                            className="hover:opacity-70"
+                                            style={{ color: isPinned ? "var(--gold)" : "var(--ash)", lineHeight: 0 }}
+                                            title={isPinned ? "Unpin" : "Pin"}
+                                        >
+                                            <PushPinIcon sx={{ fontSize: 13 }} />
+                                        </button>
+                                        {isOwner && !isMe && (
+                                            <button onClick={() => removeUser(user)} className="hover:opacity-70" style={{ color: "var(--danger)", lineHeight: 0 }}>
+                                                <PersonRemoveIcon sx={{ fontSize: 13 }} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         );
-                    })}
-                </div>
+                    };
+
+                    return (
+                        <div className="flex flex-col gap-3">
+                            {pinned && (
+                                <div className="grid grid-cols-1">
+                                    {renderTile(pinned, true)}
+                                </div>
+                            )}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                {rest.map(u => renderTile(u, false))}
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* Chat */}
                 <div className="mt-8">
@@ -598,20 +677,24 @@ const RoomPage: FC<Props> = () => {
                 </div>
             </div>
 
-            {/* Floating mute button */}
+            {/* Floating controls */}
             {inRoom && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-2">
                     <button
                         onClick={toggleMute}
                         className="flex items-center gap-2 px-7 py-3 font-bebas tracking-widest text-base transition-all hover:opacity-80"
-                        style={{
-                            background: isMuted ? "var(--danger)" : "var(--gold)",
-                            color: "var(--ink)",
-                            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-                        }}
+                        style={{ background: isMuted ? "var(--danger)" : "var(--gold)", color: "var(--ink)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
                     >
                         {isMuted ? <MicOffIcon fontSize="small" /> : <MicOutlinedIcon fontSize="small" />}
                         {isMuted ? "UNMUTE" : "MUTE"}
+                    </button>
+                    <button
+                        onClick={toggleVideo}
+                        className="flex items-center gap-2 px-7 py-3 font-bebas tracking-widest text-base transition-all hover:opacity-80"
+                        style={{ background: isVideoOn ? "var(--signal)" : "var(--ink-4)", color: isVideoOn ? "var(--ink)" : "var(--paper)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
+                    >
+                        {isVideoOn ? <VideocamIcon fontSize="small" /> : <VideocamOffIcon fontSize="small" />}
+                        {isVideoOn ? "CAM ON" : "CAM OFF"}
                     </button>
                 </div>
             )}
