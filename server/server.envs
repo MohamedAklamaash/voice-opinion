@@ -1,0 +1,6 @@
+PORT=9001
+MONGO_URL=your_mongodb_uri
+HASH_SECRET=your_jwt_secret
+SENDER_EMAIL=your@gmail.com
+SENDER_PASS=your_app_password
+CLIENT_URL=http://localhost:5173
